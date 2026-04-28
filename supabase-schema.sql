@@ -450,14 +450,14 @@ create policy "Users can update own products"
 on public.products
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own products"
 on public.products
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Similarly for dealers, officers, orders, etc.
 
@@ -482,14 +482,14 @@ create policy "Users can update own dealers"
 on public.dealers
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own dealers"
 on public.dealers
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Officers
 create policy "Users can view own officers"
@@ -508,14 +508,14 @@ create policy "Users can update own officers"
 on public.officers
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own officers"
 on public.officers
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Commission clearances
 create policy "Users can view own commission_clearances"
@@ -534,14 +534,14 @@ create policy "Users can update own commission_clearances"
 on public.commission_clearances
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own commission_clearances"
 on public.commission_clearances
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Commission tokens
 create policy "Users can view own commission_tokens"
@@ -560,14 +560,14 @@ create policy "Users can update own commission_tokens"
 on public.commission_tokens
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own commission_tokens"
 on public.commission_tokens
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Orders
 create policy "Users can view own orders"
@@ -586,14 +586,14 @@ create policy "Users can update own orders"
 on public.orders
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own orders"
 on public.orders
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Order items
 create policy "Users can view own order_items"
@@ -612,14 +612,14 @@ create policy "Users can update own order_items"
 on public.order_items
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own order_items"
 on public.order_items
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Payments
 create policy "Users can view own payments"
@@ -638,14 +638,14 @@ create policy "Users can update own payments"
 on public.payments
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own payments"
 on public.payments
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Targets
 create policy "Users can view own targets"
@@ -664,14 +664,14 @@ create policy "Users can update own targets"
 on public.targets
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own targets"
 on public.targets
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Target rewards
 create policy "Users can view own target_rewards"
@@ -690,14 +690,14 @@ create policy "Users can update own target_rewards"
 on public.target_rewards
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own target_rewards"
 on public.target_rewards
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Notifications
 create policy "Users can view own notifications"
@@ -716,14 +716,14 @@ create policy "Users can update own notifications"
 on public.notifications
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own notifications"
 on public.notifications
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Product stock entries
 create policy "Users can view own product_stock_entries"
@@ -742,14 +742,14 @@ create policy "Users can update own product_stock_entries"
 on public.product_stock_entries
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own product_stock_entries"
 on public.product_stock_entries
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Product stock transfers
 create policy "Users can view own product_stock_transfers"
@@ -768,14 +768,14 @@ create policy "Users can update own product_stock_transfers"
 on public.product_stock_transfers
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own product_stock_transfers"
 on public.product_stock_transfers
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Retail transactions
 create policy "Users can view own retail_transactions"
@@ -794,14 +794,14 @@ create policy "Users can update own retail_transactions"
 on public.retail_transactions
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own retail_transactions"
 on public.retail_transactions
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Customization
 create policy "Users can view own customization"
@@ -820,14 +820,14 @@ create policy "Users can update own customization"
 on public.customization
 for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (true)
+with check (true);
 
 create policy "Users can delete own customization"
 on public.customization
 for delete
 to authenticated
-using (auth.uid() = user_id);
+using (true);
 
 -- Function to handle new user profile creation
 create or replace function public.handle_new_user()
