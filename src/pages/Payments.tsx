@@ -34,9 +34,12 @@ const Payments = () => {
   const currentUser = api.getCurrentUser();
 
   useEffect(() => {
-    setDealers(api.getDealers());
-    setPayments(api.getPayments());
-    setReference(api.getNextPaymentReference());
+    const loadData = async () => {
+      setDealers(await api.getDealers());
+      setPayments(await api.getPayments());
+      setReference(await api.getNextPaymentReference());
+    };
+    loadData();
   }, []);
 
   const formatIndianAmount = (value: string) => {
@@ -48,14 +51,14 @@ const Payments = () => {
 
   const cleanAmount = (value: string) => Number(value.replace(/,/g, ''));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedDealerId || !amount) return showError("Select dealer and enter amount");
-    
+
     const dealer = dealers.find(d => d.id === selectedDealerId);
     if (!dealer) return;
 
     const payment: Payment = {
-      id: editingPayment?.id || api.getNextPaymentId(),
+      id: editingPayment?.id || await api.getNextPaymentId(),
       dealerId: dealer.id,
       dealerName: dealer.name,
       date: paymentDate,
@@ -65,15 +68,15 @@ const Payments = () => {
       notes
     };
 
-    api.savePayment(payment);
-    setPayments(api.getPayments());
-    setDealers(api.getDealers());
-    
+    await api.savePayment(payment);
+    setPayments(await api.getPayments());
+    setDealers(await api.getDealers());
+
     // Reset form
     setSelectedDealerId('');
     setDealerSearch('');
     setAmount('');
-    setReference(api.getNextPaymentReference());
+    setReference(await api.getNextPaymentReference());
     setNotes('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setEditingPayment(null);
@@ -91,11 +94,11 @@ const Payments = () => {
     setPaymentDate(p.date);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Delete this payment record?")) {
-      api.deletePayment(id);
-      setPayments(api.getPayments());
-      setDealers(api.getDealers());
+      await api.deletePayment(id);
+      setPayments(await api.getPayments());
+      setDealers(await api.getDealers());
       showSuccess("Payment deleted");
     }
   };
@@ -192,12 +195,12 @@ const Payments = () => {
                 {editingPayment ? 'Update' : 'Record'} Payment
               </Button>
               {editingPayment && (
-                <Button variant="ghost" className="w-full" onClick={() => {
+                <Button variant="ghost" className="w-full" onClick={async () => {
                   setEditingPayment(null);
                   setSelectedDealerId('');
                   setDealerSearch('');
                   setAmount('');
-                  setReference(api.getNextPaymentReference());
+                  setReference(await api.getNextPaymentReference());
                   setNotes('');
                   setPaymentDate(new Date().toISOString().split('T')[0]);
                 }}>Cancel Edit</Button>

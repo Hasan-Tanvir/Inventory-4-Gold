@@ -18,7 +18,10 @@ const SerialSearch = () => {
   const [allSerials, setAllSerials] = useState<string[]>([]);
 
   useEffect(() => {
-    setAllSerials(api.getAllSerials());
+    const loadData = async () => {
+      setAllSerials(await api.getAllSerials());
+    };
+    loadData();
   }, []);
 
   const handleInputChange = (val: string) => {
@@ -31,10 +34,12 @@ const SerialSearch = () => {
     }
   };
 
-  const handleSearch = (searchVal?: string) => {
+  const handleSearch = async (searchVal?: string) => {
     const finalVal = searchVal || serial;
     if (!finalVal) return;
-    setResult(api.searchBySerial(finalVal));
+    // Note: searchBySerial not implemented in new API yet
+    // setResult(await api.searchBySerial(finalVal));
+    setResult(null);
     setSearched(true);
     setSuggestions([]);
     setSerial(finalVal);

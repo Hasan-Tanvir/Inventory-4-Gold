@@ -40,10 +40,13 @@ const Targets = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
-    setTargets(api.getTargets());
-    setDealers(api.getDealers());
-    setProducts(api.getProducts());
-    setOrders(api.getOrders());
+    const loadData = async () => {
+      setTargets(await api.getTargets());
+      setDealers(await api.getDealers());
+      setProducts(await api.getProducts());
+      setOrders(await api.getOrders());
+    };
+    loadData();
   }, []);
 
   const activeTargets = useMemo(() => targets.filter(t => t.status === 'active'), [targets]);
@@ -82,7 +85,7 @@ const Targets = () => {
       : relevantItems.reduce((sum, i) => sum + i.quantity, 0);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingTarget?.targetValue || !editingTarget?.endDate) return showError("Please set target value and end date");
     
     const target: Target = {
@@ -101,8 +104,8 @@ const Targets = () => {
       status: 'active'
     };
     
-    api.saveTarget(target);
-    setTargets(api.getTargets());
+    await api.saveTarget(target);
+    setTargets(await api.getTargets());
     setEditingTarget(getInitialTarget());
     showSuccess(editingTarget.id ? "Target updated" : "Target created");
   };
@@ -119,7 +122,7 @@ const Targets = () => {
     });
   };
 
-  const handleRenewBatch = (t: Target) => {
+  const handleRenewBatch = async (t: Target) => {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
 
@@ -133,9 +136,9 @@ const Targets = () => {
       endDate: nextMonth.toISOString().split('T')[0]
     };
 
-    api.saveTarget(archived);
-    api.saveTarget(renewed);
-    setTargets(api.getTargets());
+    await api.saveTarget(archived);
+    await api.saveTarget(renewed);
+    setTargets(await api.getTargets());
     showSuccess('Target renewed for next batch');
   };
 
@@ -317,7 +320,7 @@ const Targets = () => {
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingTarget(t)}><Edit className="w-3.5 h-3.5" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleReapply(t)}><RefreshCw className="w-3.5 h-3.5" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => handleRenewBatch(t)} title="Renew next batch"><TargetIcon className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => { if(confirm('Delete?')) { api.deleteTarget(t.id); setTargets(api.getTargets()); } }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={async () => { if(confirm('Delete?')) { await api.deleteTarget(t.id); setTargets(await api.getTargets()); } }}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </div>
                         <div className="text-xs font-black text-emerald-600">
                           {rewardType === 'percentage' ? `${rewardValue}%` : `৳${rewardValue.toLocaleString()}`}

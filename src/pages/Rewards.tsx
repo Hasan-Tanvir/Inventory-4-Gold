@@ -24,8 +24,11 @@ const Rewards = () => {
   const [editNote, setEditNote] = useState('');
 
   useEffect(() => {
-    setRewards(api.getTargetRewards());
-    setOfficers(api.getOfficers());
+    const loadData = async () => {
+      setRewards(await api.getTargetRewards());
+      setOfficers(await api.getOfficers());
+    };
+    loadData();
   }, []);
 
   const sortedRewards = useMemo(
@@ -41,25 +44,25 @@ const Rewards = () => {
     setEditNote(reward.note || '');
   };
 
-  const handleUpdateReward = () => {
+  const handleUpdateReward = async () => {
     if (!editingReward) return;
-    const result = api.updateTargetReward(editingReward.id, {
+    const result = await api.updateTargetReward(editingReward.id, {
       officerId: editOfficerId === 'none' ? undefined : editOfficerId,
       amount: Number(editAmount || 0),
       date: editDate,
       note: editNote
     });
     if (!result.success) return showError(result.message || 'Failed to update reward');
-    setRewards(api.getTargetRewards());
+    setRewards(await api.getTargetRewards());
     setEditingReward(null);
     showSuccess('Dealer reward updated');
   };
 
-  const handleUndo = (rewardId: string) => {
+  const handleUndo = async (rewardId: string) => {
     if (!confirm('Undo this reward? Dealer balance and target cycle will be reverted.')) return;
-    const result = api.undoTargetReward(rewardId);
+    const result = await api.undoTargetReward(rewardId);
     if (!result.success) return showError(result.message || 'Failed to undo reward');
-    setRewards(api.getTargetRewards());
+    setRewards(await api.getTargetRewards());
     showSuccess('Reward undone');
   };
 

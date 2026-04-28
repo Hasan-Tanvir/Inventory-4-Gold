@@ -19,11 +19,14 @@ const Invoices = () => {
   const [dealers, setDealers] = useState<Dealer[]>([]);
 
   useEffect(() => {
-    const user = api.getCurrentUser();
-    setCurrentUser(user);
-    setOrders(api.getOrders());
-    setConfig(api.getCustomization());
-    setDealers(api.getDealers());
+    const loadData = async () => {
+      const user = await api.getCurrentUser();
+      setCurrentUser(user);
+      setOrders(await api.getOrders());
+      setConfig(await api.getCustomization());
+      setDealers(await api.getDealers());
+    };
+    loadData();
   }, []);
 
   const selectedOrder = orders.find(o => o.id === selectedOrderId);

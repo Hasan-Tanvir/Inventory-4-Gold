@@ -43,12 +43,15 @@ const Reports = () => {
   const [showCommission, setShowCommission] = useState(true);
 
   useEffect(() => {
-    setOrders(api.getOrders());
-    setDealers(api.getDealers());
-    setOfficers(api.getOfficers());
-    setProducts(api.getProducts());
-    setCategories(api.getCategories());
-    setConfig(api.getCustomization());
+    const loadData = async () => {
+      setOrders(await api.getOrders());
+      setDealers(await api.getDealers());
+      setOfficers(await api.getOfficers());
+      setProducts(await api.getProducts());
+      setCategories(await api.getCategories());
+      setConfig(await api.getCustomization());
+    };
+    loadData();
   }, []);
 
   const filteredOrders = useMemo(() => 

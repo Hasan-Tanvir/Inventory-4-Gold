@@ -65,10 +65,13 @@ const Products = () => {
   const [viewMode, setViewMode] = useState<'tile' | 'list'>('tile');
 
   useEffect(() => {
-    setProducts(api.getProducts());
-    setCategories(api.getCategories());
-    setStockEntries(api.getProductStockEntries());
-    setStockTransfers(api.getProductStockTransfers());
+    const loadData = async () => {
+      setProducts(await api.getProducts());
+      setCategories(await api.getCategories());
+      setStockEntries(await api.getProductStockEntries());
+      setStockTransfers(await api.getProductStockTransfers());
+    };
+    loadData();
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -79,12 +82,27 @@ const Products = () => {
     });
   }, [products, searchTerm, selectedCategory]);
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (editingProduct && editingProduct.name) {
       const isNewProduct = !editingProduct.id;
       const initialDhaka = Number(editingProduct.dhaka || 0);
       const initialCtg = Number(editingProduct.chittagong || 0);
-      const savedProduct = api.saveProduct(editingProduct as Product);
+      let savedProduct: Product | null = null;
+
+      if (isNewProduct) {
+        savedProduct = await api.saveProduct(editingProduct as Product);
+        if (!savedProduct) {
+          showError("Failed to save product");
+          return;
+        }
+      } else {
+        const updated = await api.updateProduct(editingProduct.id, editingProduct as Product);
+        if (!updated) {
+          showError("Failed to update product");
+          return;
+        }
+        savedProduct = editingProduct as Product;
+      }
 
       if (isNewProduct) {
         const initialEntries: ProductStockEntry[] = [];
@@ -114,20 +132,25 @@ const Products = () => {
         }
         if (initialEntries.length > 0) {
           // Initial stock is already saved in the product row, so only write history.
-          api.saveProductStockEntries(initialEntries, { applyToInventory: false });
+          await api.saveProductStockEntries(initialEntries, { applyToInventory: false });
         }
       }
-      setProducts(api.getProducts());
-      setStockEntries(api.getProductStockEntries());
+      setProducts(await api.getProducts());
+      setStockEntries(await api.getProductStockEntries());
       setEditingProduct(null);
-      showSuccess("Product saved");
+      showSuccess(isNewProduct ? "Product created" : "Product updated");
     }
   };
 
-  const handleSaveCategory = () => {
+  const handleSaveCategory = async () => {
     if (!newCategoryName) return;
-    api.saveCategory({ id: editingCategory?.id || `CAT-${Date.now()}`, name: newCategoryName });
-    setCategories(api.getCategories());
+    const categoryToSave = editingCategory ? { id: editingCategory.id, name: newCategoryName } : { name: newCategoryName };
+    const saved = await api.saveCategory(categoryToSave);
+    if (!saved) {
+      showError("Failed to save category");
+      return;
+    }
+    setCategories(await api.getCategories());
     setNewCategoryName('');
     setEditingCategory(null);
     showSuccess("Category saved");
@@ -155,7 +178,7 @@ const Products = () => {
     setEditingProduct({ ...editingProduct, slabs });
   };
 
-  const handleSaveStockEntry = () => {
+  const handleSaveStockEntry = async () => {
     const validItems = stockEntryItems.filter(i => i.productId && Number(i.quantity) > 0);
     if (validItems.length === 0) return;
 
@@ -174,9 +197,9 @@ const Products = () => {
       };
     });
 
-    api.saveProductStockEntries(payload);
-    setProducts(api.getProducts());
-    setStockEntries(api.getProductStockEntries());
+    await api.saveProductStockEntries(payload);
+    setProducts(await api.getProducts());
+    setStockEntries(await api.getProductStockEntries());
     setStockEntryItems([{ productId: '', quantity: '' }]);
     setStockEntryNote('');
     setStockEntryDate(getTodayISO());
@@ -228,7 +251,7 @@ const Products = () => {
   };
 
   const canDragProducts = selectedCategory === 'all' && searchTerm.trim() === '';
-  const handleProductDrop = (targetId: string) => {
+  const handleProductDrop = async (targetId: string) => {
     if (!draggedProductId || draggedProductId === targetId || !canDragProducts) return;
     const current = [...products];
     const from = current.findIndex(p => p.id === draggedProductId);
@@ -236,8 +259,8 @@ const Products = () => {
     if (from === -1 || to === -1) return;
     const [moved] = current.splice(from, 1);
     current.splice(to, 0, moved);
-    api.reorderProducts(current.map(p => p.id));
-    setProducts(api.getProducts());
+    await api.reorderProducts(current.map(p => p.id));
+    setProducts(await api.getProducts());
     setDraggedProductId(null);
   };
 
@@ -279,12 +302,12 @@ const Products = () => {
     return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [stockEntries]);
 
-  const handleSaveStockTransfer = () => {
+  const handleSaveStockTransfer = async () => {
     if (!stockTransferForm.productId || !stockTransferForm.quantity) return;
     const product = products.find(p => p.id === stockTransferForm.productId);
     if (!product) return;
 
-    const result = api.saveProductStockTransfer({
+    const result = await api.saveProductStockTransfer({
       id: '',
       date: stockTransferForm.date,
       productId: stockTransferForm.productId,
@@ -300,8 +323,8 @@ const Products = () => {
       return;
     }
 
-    setProducts(api.getProducts());
-    setStockTransfers(api.getProductStockTransfers());
+    setProducts(await api.getProducts());
+    setStockTransfers(await api.getProductStockTransfers());
     setShowStockTransferDialog(false);
     setStockTransferForm({
       productId: '',
@@ -422,7 +445,7 @@ const Products = () => {
                             </div>
                             <div className="flex gap-2">
                               <Button variant="outline" size="sm" className="flex-1 h-10" onClick={() => setEditingProduct(p)}><Edit className="w-4 h-4 mr-1" />Edit</Button>
-                              <Button variant="destructive" size="sm" className="flex-1 h-10" onClick={() => { if (confirm('Delete?')) { api.deleteProduct(p.id); setProducts(api.getProducts()); } }}>Delete</Button>
+                              <Button variant="destructive" size="sm" className="flex-1 h-10" onClick={async () => { if (confirm('Delete?')) { const success = await api.deleteProduct(p.id); if (success) { setProducts(await api.getProducts()); showSuccess('Product deleted'); } else { showError('Failed to delete product'); } } }}>Delete</Button>
                             </div>
                           </CardContent>
                         </Card>
@@ -476,7 +499,7 @@ const Products = () => {
                             </TableCell>
                             <TableCell className="text-right space-x-1">
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingProduct(p)}><Edit className="w-3.5 h-3.5" /></Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => { if(confirm('Delete?')) { api.deleteProduct(p.id); setProducts(api.getProducts()); } }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={async () => { if(confirm('Delete?')) { const success = await api.deleteProduct(p.id); if (success) { setProducts(await api.getProducts()); showSuccess('Product deleted'); } else { showError('Failed to delete product'); } } }}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -603,7 +626,7 @@ const Products = () => {
                     <span className="text-sm font-medium">{cat.name}</span>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingCategory(cat); setNewCategoryName(cat.name); }}><Edit className="w-3 h-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400" onClick={() => { if(confirm('Delete?')) { api.deleteCategory(cat.id); setCategories(api.getCategories()); } }}><Trash2 className="w-3 h-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400" onClick={async () => { if(confirm('Delete?')) { const success = await api.deleteCategory(cat.id); if (success) { setCategories(await api.getCategories()); showSuccess("Category deleted"); } else { showError("Failed to delete category"); } } }}><Trash2 className="w-3 h-3" /></Button>
                     </div>
                   </div>
                 ))}

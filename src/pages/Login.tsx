@@ -19,7 +19,7 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const user = await api.login(email, pass);
+    const user = await api.signIn(email, pass);
     setIsLoading(false);
     if (user) {
       navigate('/');

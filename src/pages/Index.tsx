@@ -16,7 +16,11 @@ const Dashboard = () => {
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    setStats(api.getDashboardStats());
+    const loadStats = async () => {
+      const stats = await api.getDashboardStats();
+      setStats(stats);
+    };
+    loadStats();
   }, []);
 
   if (!stats) return null;

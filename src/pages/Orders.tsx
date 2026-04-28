@@ -28,27 +28,30 @@ const Orders = () => {
   const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    setOrders(api.getOrders());
-    setUser(api.getCurrentUser());
+    const loadData = async () => {
+      setOrders(await api.getOrders());
+      setUser(await api.getCurrentUser());
+    };
+    loadData();
   }, []);
 
   const handleApprove = async (id: string) => {
     if (!user) return;
     await api.approveOrder(id, user.id);
-    setOrders(api.getOrders());
+    setOrders(await api.getOrders());
     showSuccess("Order approved and stock updated.");
   };
 
-  const handleReject = (id: string) => {
-    api.rejectOrder(id);
-    setOrders(api.getOrders());
+  const handleReject = async (id: string) => {
+    await api.rejectOrder(id);
+    setOrders(await api.getOrders());
     showSuccess("Order rejected");
   };
 
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this order?")) {
       await api.deleteOrder(id);
-      setOrders(api.getOrders());
+      setOrders(await api.getOrders());
       showSuccess("Order deleted");
     }
   };

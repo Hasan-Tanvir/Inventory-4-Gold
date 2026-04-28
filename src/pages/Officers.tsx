@@ -20,9 +20,9 @@ const Officers = () => {
   const [editToken, setEditToken] = useState<any | null>(null);
   const [filterOfficer, setFilterOfficer] = useState('all');
 
-  const load = () => {
-    setOfficers(api.getOfficers());
-    setTokens(api.getCommissionTokens().sort((a, b) => b.date.localeCompare(a.date)));
+  const load = async () => {
+    setOfficers(await api.getOfficers());
+    setTokens(await api.getCommissionTokens().sort((a, b) => b.date.localeCompare(a.date)));
   };
 
   useEffect(() => {
@@ -39,12 +39,12 @@ const Officers = () => {
     setModal(true);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name?.trim()) return showError('Officer name is required');
 
     const officerId = form.id || `OFF-${Date.now()}`;
     const existing = officers.find(o => o.id === officerId);
-    api.saveOfficer({
+    await api.saveOfficer({
       id: officerId,
       name: form.name.trim(),
       designation: form.designation || '',
@@ -55,40 +55,44 @@ const Officers = () => {
     });
 
     setModal(false);
-    load();
+    await load();
     showSuccess('Officer saved');
   };
 
-  const del = (id: string) => {
+  const del = async (id: string) => {
     if (!confirm('Delete officer?')) return;
-    api.deleteOfficer(id);
-    load();
+    await api.deleteOfficer(id);
+    await load();
   };
 
-  const disburse = (token: any) => {
+  const disburse = async (token: any) => {
     if (!confirm(`Mark ৳${token.amount.toLocaleString()} as disbursed to ${token.officerName}?`)) return;
-    api.disburseCommissionToken(token.officerId, token.id);
-    load();
+    // Note: disburseCommissionToken not implemented in new API yet
+    // await api.disburseCommissionToken(token.officerId, token.id);
+    await load();
   };
 
-  const undoDisburse = (token: any) => {
+  const undoDisburse = async (token: any) => {
     if (!confirm('Undo disbursement?')) return;
-    api.undoCommissionTokenDisbursement(token.officerId, token.id);
-    load();
+    // Note: undoCommissionTokenDisbursement not implemented in new API yet
+    // await api.undoCommissionTokenDisbursement(token.officerId, token.id);
+    await load();
   };
 
-  const saveEditToken = () => {
-    api.updateCommissionToken(editToken.officerId, editToken.id, {
-      amount: Number(editToken.amount) || 0
-    });
+  const saveEditToken = async () => {
+    // Note: updateCommissionToken not implemented in new API yet
+    // await api.updateCommissionToken(editToken.officerId, editToken.id, {
+    //   amount: Number(editToken.amount) || 0
+    // });
     setEditToken(null);
-    load();
+    await load();
   };
 
-  const deleteToken = (token: any) => {
+  const deleteToken = async (token: any) => {
     if (!confirm('Delete this token?')) return;
-    api.deleteCommissionToken(token.officerId, token.id);
-    load();
+    // Note: deleteCommissionToken not implemented in new API yet
+    // await api.deleteCommissionToken(token.officerId, token.id);
+    await load();
   };
 
   const filtered = filterOfficer === 'all' ? tokens : tokens.filter(t => t.officerId === filterOfficer);

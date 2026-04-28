@@ -25,10 +25,13 @@ const Balance = () => {
   const BALANCE_DRAFT_KEY = 'inventory4-dealer-balance-state';
 
   useEffect(() => {
-    setDealers(api.getDealers());
-    setOrders(api.getOrders());
-    setPayments(api.getPayments());
-    setConfig(api.getCustomization());
+    const loadData = async () => {
+      setDealers(await api.getDealers());
+      setOrders(await api.getOrders());
+      setPayments(await api.getPayments());
+      setConfig(await api.getCustomization());
+    };
+    loadData();
 
     if (typeof window !== 'undefined') {
       const raw = window.localStorage.getItem(BALANCE_DRAFT_KEY);

@@ -27,18 +27,32 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   } as React.CSSProperties : undefined;
 
   useEffect(() => {
-    const currentUser = api.getCurrentUser();
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
-    setUser(currentUser);
-    setConfig(api.getConfig());
-    setNotifications(api.getNotifications(currentUser.id));
-    const memberTabs = currentUser.role === 'member' ? (currentUser.allowedTabs || []) : [];
-    if (memberTabs.length > 0 && !memberTabs.includes(location.pathname)) {
-      navigate(memberTabs[0]);
-    }
+    const loadData = async () => {
+      const currentUser = await api.getCurrentUser();
+      if (!currentUser) {
+        navigate('/login');
+        return;
+      }
+      setUser(currentUser);
+      const configData = await api.getCustomization();
+      setConfig(configData || {
+        title: 'Bicycle Inventory',
+        logo: '',
+        sidebarColor: '#1f2937',
+        mainColor: '#3b82f6',
+        initialRetailAmount: 0,
+        regards: 'Best Regards',
+        execName: 'Executive',
+        execDetails: '',
+      });
+      const notificationsData = await api.getNotifications();
+      setNotifications(notificationsData);
+      const memberTabs = currentUser.role === 'member' ? (currentUser.allowedTabs || []) : [];
+      if (memberTabs.length > 0 && !memberTabs.includes(location.pathname)) {
+        navigate(memberTabs[0]);
+      }
+    };
+    loadData();
   }, [navigate, location.pathname]);
 
   if (!config || !user) return (
@@ -115,7 +129,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               <p className="text-[10px] font-black truncate">{user.name}</p>
               <p className="text-[8px] font-bold uppercase opacity-40">{user.role}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => { api.logout(); navigate('/login'); }} className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/10">
+            <Button variant="ghost" size="icon" onClick={async () => { await api.signOut(); navigate('/login'); }} className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/10">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
@@ -152,7 +166,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     ))}
                   </nav>
                   <div className="p-3 border-t border-white/10">
-                    <Button variant="ghost" onClick={() => { api.logout(); navigate('/login'); }} className="w-full justify-start text-white/80 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" onClick={async () => { await api.signOut(); navigate('/login'); }} className="w-full justify-start text-white/80 hover:text-white hover:bg-white/10">
                       <LogOut className="w-4 h-4 mr-2" /> Logout
                     </Button>
                   </div>
@@ -167,12 +181,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <div className="flex items-center gap-4">
             <p className="text-[11px] sm:text-xs font-bold text-slate-600">
               Hello, {user.name}
-            </p>            <Button variant="ghost" size="icon" onClick={() => { api.logout(); navigate('/login'); }} className="h-10 w-10 rounded-xl hover:bg-slate-50 lg:hidden">
+            </p>            <Button variant="ghost" size="icon" onClick={async () => { await api.signOut(); navigate('/login'); }} className="h-10 w-10 rounded-xl hover:bg-slate-50 lg:hidden">
               <LogOut className="w-5 h-5 text-slate-400" />
-            </Button>            <Popover onOpenChange={(open) => {
+            </Button>            <Popover onOpenChange={async (open) => {
               if (open && unreadCount > 0) {
-                api.markNotificationsRead(user.id);
-                setNotifications(api.getNotifications(user.id));
+                await api.markNotificationsRead(user.id);
+                setNotifications(await api.getNotifications(user.id));
               }
             }}>
               <PopoverTrigger asChild>

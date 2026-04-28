@@ -27,9 +27,12 @@ const StockBalance = () => {
   const [sendNote, setSendNote] = useState('');
 
   useEffect(() => {
-    setProducts(api.getProducts());
-    setOrders(api.getOrders());
-    setSendAmounts(api.getSendAmounts());
+    const loadData = async () => {
+      setProducts(await api.getProducts());
+      setOrders(await api.getOrders());
+      setSendAmounts(await api.getSendAmounts());
+    };
+    loadData();
   }, []);
 
   const balanceData = useMemo(() => {
@@ -60,16 +63,16 @@ const StockBalance = () => {
     };
   }, [products, orders, sendAmounts]);
 
-  const handleSendAmount = () => {
+  const handleSendAmount = async () => {
     if (!sendAmount) return;
-    api.saveSendAmount({
+    await api.saveSendAmount({
       id: '',
       date: new Date().toISOString().split('T')[0],
       location: sendLocation,
       amount: Number(sendAmount),
       note: sendNote
     });
-    setSendAmounts(api.getSendAmounts());
+    setSendAmounts(await api.getSendAmounts());
     setSendAmount('');
     setSendNote('');
     showSuccess("Send amount recorded");

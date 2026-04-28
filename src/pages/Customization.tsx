@@ -47,14 +47,41 @@ const CustomizationPage = () => {
   const mobileTabCandidates = allTabPermissions;
 
   useEffect(() => {
-    setConfig(api.getCustomization());
-    setUsers(api.getUsers());
-    setOfficers(api.getOfficers());
+    const loadData = async () => {
+      let loadedConfig = await api.getCustomization();
+      if (!loadedConfig) {
+        const defaultConfig: Customization = {
+          title: 'Bicycle Inventory',
+          logo: '',
+          sidebarColor: '#1f2937',
+          mainColor: '#3b82f6',
+          initialRetailAmount: 0,
+          initialRetailAmountDhaka: 0,
+          initialRetailAmountChittagong: 0,
+          regards: 'Best Regards',
+          execName: 'Executive',
+          customDetailText: '',
+          customDetailHtml: '',
+          customDetailBold: false,
+          customDetailItalic: false,
+          customDetailBoxed: false,
+          orderSerialSeed: 'R00001',
+          quoteSerialSeed: 'Q00001',
+          paymentReferenceSeed: 'P00001',
+        };
+        await api.saveCustomization(defaultConfig);
+        loadedConfig = defaultConfig;
+      }
+      setConfig(loadedConfig);
+      setUsers(await api.getUsers());
+      setOfficers(await api.getOfficers());
+    };
+    loadData();
   }, []);
 
-  const handleSaveConfig = () => {
+  const handleSaveConfig = async () => {
     if (config) {
-      api.saveCustomization(config);
+      await api.saveCustomization(config);
       showSuccess("Settings saved");
       window.location.reload();
     }
@@ -65,10 +92,10 @@ const CustomizationPage = () => {
     return officers.find(o => o.id === id)?.name || id;
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.id || !newUser.name || !newUser.password) return showError("Fill all fields");
     const allowedTabs = newUser.role === 'member' ? (newUser.allowedTabs || allTabPermissions.map(t => t.path)) : [];
-    api.saveUser({
+    await api.saveUser({
       ...newUser,
       notificationsEnabled: true,
       allowedTabs,
@@ -77,26 +104,26 @@ const CustomizationPage = () => {
         : defaultMobileTabs,
       officerId: newUser.officerId || undefined
     } as User);
-    setUsers(api.getUsers());
+    setUsers(await api.getUsers());
     setNewUser({ role: 'member' });
     showSuccess("User created");
   };
-  const updateUserMobileTabs = (userId: string, path: string, enabled: boolean) => {
+  const updateUserMobileTabs = async (userId: string, path: string, enabled: boolean) => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
     const currentTabs = targetUser.mobileQuickTabs?.length ? targetUser.mobileQuickTabs : defaultMobileTabs;
     const nextTabs = enabled
       ? Array.from(new Set([...currentTabs, path])).slice(0, 5)
       : currentTabs.filter(tabPath => tabPath !== path);
-    api.saveUser({ ...targetUser, mobileQuickTabs: nextTabs });
-    setUsers(api.getUsers());
+    await api.saveUser({ ...targetUser, mobileQuickTabs: nextTabs });
+    setUsers(await api.getUsers());
   };
-  const saveEditedUser = () => {
+  const saveEditedUser = async () => {
     if (!editingUser) return;
-    api.saveUser(editingUser);
-    const isCurrent = api.getCurrentUser()?.id === editingUser.id;
-    if (isCurrent) api.login(editingUser.id, editingUser.password || '');
-    setUsers(api.getUsers());
+    await api.saveUser(editingUser);
+    const isCurrent = (await api.getCurrentUser())?.id === editingUser.id;
+    if (isCurrent && editingUser.password) await api.signIn(editingUser.id, editingUser.password);
+    setUsers(await api.getUsers());
     setEditingUser(null);
     showSuccess('User updated');
   };
@@ -328,7 +355,7 @@ const CustomizationPage = () => {
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => setEditingUser(u)}>Edit</Button>
-                              <Button variant="ghost" size="icon" className="text-red-400" onClick={() => { if(confirm('Delete?')) { api.deleteUser(u.id); setUsers(api.getUsers()); } }} disabled={u.id === 'admin'}><Trash2 className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" className="text-red-400" onClick={async () => { if(confirm('Delete?')) { await api.deleteUser(u.id); setUsers(await api.getUsers()); } }} disabled={u.id === 'admin'}><Trash2 className="w-4 h-4" /></Button>
                             </div>
                           </TableCell>
                         </TableRow>

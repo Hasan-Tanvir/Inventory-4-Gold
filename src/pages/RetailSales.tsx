@@ -35,14 +35,17 @@ const RetailSales = () => {
   const [payDialogOrder, setPayDialogOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    api.syncRetailSalesFromApprovedOrders();
-    setTransactions(api.getRetailTransactions());
-    setConfig(api.getCustomization());
+    const loadData = async () => {
+      await api.syncRetailSalesFromApprovedOrders();
+      setTransactions(await api.getRetailTransactions());
+      setConfig(await api.getCustomization());
+    };
+    loadData();
   }, []);
 
-  const refreshRetailData = () => {
-    api.syncRetailSalesFromApprovedOrders();
-    setTransactions(api.getRetailTransactions());
+  const refreshRetailData = async () => {
+    await api.syncRetailSalesFromApprovedOrders();
+    setTransactions(await api.getRetailTransactions());
   };
 
   const filteredTransactions = useMemo(() => 
@@ -69,7 +72,7 @@ const RetailSales = () => {
     }, 0);
   }, [filteredTransactions, initialByLocation]);
 
-  const handleAddTransaction = () => {
+  const handleAddTransaction = async () => {
     if (!txDetail || !txAmount) return;
     const rawAmount = Number(txAmount);
     const normalizedAmount = txType === 'sent_to_main'
@@ -83,22 +86,22 @@ const RetailSales = () => {
       location,
       type: txType
     };
-    api.saveRetailTransaction(newTx);
-    refreshRetailData();
+    await api.saveRetailTransaction(newTx);
+    await refreshRetailData();
     setTxDetail('');
     setTxAmount('');
     showSuccess("Transaction recorded");
   };
 
-  const setRetailPaymentStatus = (orderId: string, status: 'paid' | 'unpaid' | 'partial') => {
-    const result = api.setRetailOrderPaymentStatus(orderId, status);
+  const setRetailPaymentStatus = async (orderId: string, status: 'paid' | 'unpaid' | 'partial') => {
+    const result = await api.setRetailOrderPaymentStatus(orderId, status);
     if (!result.success) return;
-    refreshRetailData();
+    await refreshRetailData();
     showSuccess(`Retail order marked as ${status}.`);
   };
 
-  const payAmount = (orderId: string, amount: number) => {
-    const orders = api.getOrders();
+  const payAmount = async (orderId: string, amount: number) => {
+    const orders = await api.getOrders();
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
     const currentPaid = order.partialAmount || 0;
@@ -108,14 +111,15 @@ const RetailSales = () => {
     if (newPaid >= total) {
       newStatus = 'paid';
     }
-    const result = api.setRetailOrderPaymentStatus(orderId, newStatus, newPaid);
+    const result = await api.setRetailOrderPaymentStatus(orderId, newStatus, newPaid);
     if (!result.success) return;
-    refreshRetailData();
+    await refreshRetailData();
     showSuccess(`Payment of ৳${amount} added.`);
   };
 
-  const openPayDialog = (orderId: string) => {
-    const order = api.getOrders().find(o => o.id === orderId) || null;
+  const openPayDialog = async (orderId: string) => {
+    const orders = await api.getOrders();
+    const order = orders.find(o => o.id === orderId) || null;
     const dueAmount = order ? Math.max(order.netTotal - (order.partialAmount || 0), 0) : 0;
     setPayAmountOrderId(orderId);
     setPayDialogOrder(order);
@@ -123,23 +127,30 @@ const RetailSales = () => {
     setPayDialogOpen(true);
   };
 
-  const submitPayAmount = () => {
+  const submitPayAmount = async () => {
     if (!payAmountOrderId || payAmountValue <= 0) return;
-    payAmount(payAmountOrderId, payAmountValue);
+    await payAmount(payAmountOrderId, payAmountValue);
     setPayDialogOpen(false);
     setPayDialogOrder(null);
     setPayAmountOrderId(null);
     setPayAmountValue(0);
   };
 
-  const handleUpdateInitial = (val: number) => {
+  const handleUpdateInitial = async (val: number) => {
     if (config) {
       const newConfig = location === 'dhaka'
         ? { ...config, initialRetailAmountDhaka: val }
         : { ...config, initialRetailAmountChittagong: val };
-      api.saveCustomization(newConfig);
+      await api.saveCustomization(newConfig);
       setConfig(newConfig);
       showSuccess("Initial balance updated");
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    if (confirm('Delete?')) {
+      await api.deleteRetailTransaction(id);
+      setTransactions(await api.getRetailTransactions());
     }
   };
 
@@ -322,12 +333,7 @@ const RetailSales = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 opacity-70 hover:opacity-100"
-                                onClick={() => {
-                                  if (confirm('Delete?')) {
-                                    api.deleteRetailTransaction(t.id);
-                                    setTransactions(api.getRetailTransactions());
-                                  }
-                                }}
+                                onClick={() => deleteTransaction(t.id)}
                               >
                                 <Trash2 className="w-4 h-4 text-red-400" />
                               </Button>
@@ -390,12 +396,7 @@ const RetailSales = () => {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 opacity-70 hover:opacity-100"
-                          onClick={() => {
-                            if (confirm('Delete?')) {
-                              api.deleteRetailTransaction(t.id);
-                              setTransactions(api.getRetailTransactions());
-                            }
-                          }}
+                          onClick={() => deleteTransaction(t.id)}
                         >
                           <Trash2 className="w-4 h-4 text-red-400" />
                         </Button>

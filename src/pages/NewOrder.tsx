@@ -6,7 +6,7 @@ import Layout from '@/components/Layout';
 import { api } from '@/services/api';
 import { formatNumber, generateInvoiceHtml, printDoc } from '@/utils/invoice-generator';
 import { showSuccess, showError } from '@/utils/toast';
-import { Dealer, Officer, Product, Order, Customization } from '@/types';
+import { Dealer, Officer, Product, Order, Customization, User } from '@/types';
 import { Trash2, ChevronDown, ChevronUp, Plus, GripVertical, Download, FileText, X, RefreshCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -279,7 +279,7 @@ export default function NewOrder() {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [officers, setOfficers] = useState<Officer[]>([]);
-  const [settings, setSettings] = useState<Customization>(api.getCustomization());
+  const [settings, setSettings] = useState<Customization>({} as Customization);
 
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
   const [orderType, setOrderType] = useState<'dealer' | 'retail'>('dealer');
@@ -308,7 +308,7 @@ export default function NewOrder() {
   const [retailPaymentStatus, setRetailPaymentStatus] = useState<'paid' | 'unpaid' | 'partial'>('unpaid');
   const [partialAmount, setPartialAmount] = useState<number>(0);
   const [showAdjustments, setShowAdjustments] = useState(false);
-  const currentUser = api.getCurrentUser();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const isMember = currentUser?.role === 'member';
   const draftStorageKey = routeOrderId ? `inventory4-new-order-draft-${routeOrderId}` : 'inventory4-new-order-draft';
 
@@ -343,49 +343,53 @@ export default function NewOrder() {
     })
   );
 
-  const loadData = () => {
-    setDealers(api.getDealers());
-    setProducts(api.getProducts());
-    setOrders(api.getOrders());
-    setOfficers(api.getOfficers());
-    setSettings(api.getCustomization());
+  const loadData = async () => {
+    setDealers(await api.getDealers());
+    setProducts(await api.getProducts());
+    setOrders(await api.getOrders());
+    setOfficers(await api.getOfficers());
+    setSettings(await api.getCustomization());
+    setCurrentUser(await api.getCurrentUser());
   };
 
   useEffect(() => {
-    loadData();
-    const params = new URLSearchParams(window.location.search);
-    const editId = routeOrderId || params.get('edit');
-    const draftKey = editId ? `inventory4-new-order-draft-${editId}` : 'inventory4-new-order-draft';
-    const draftJson = typeof window !== 'undefined' ? window.localStorage.getItem(draftKey) : null;
-    const draft = draftJson ? JSON.parse(draftJson) : null;
+    const loadAndInitialize = async () => {
+      await loadData();
+      const params = new URLSearchParams(window.location.search);
+      const editId = routeOrderId || params.get('edit');
+      const draftKey = editId ? `inventory4-new-order-draft-${editId}` : 'inventory4-new-order-draft';
+      const draftJson = typeof window !== 'undefined' ? window.localStorage.getItem(draftKey) : null;
+      const draft = draftJson ? JSON.parse(draftJson) : null;
 
-    if (draft) {
-      setOrderDate(draft.orderDate || new Date().toISOString().split('T')[0]);
-      setOrderType(draft.orderType || 'dealer');
-      setInventorySource(draft.inventorySource || 'chittagong');
-      setDealerSearch(draft.dealerSearch || '');
-      setSelectedDealer(draft.selectedDealerId ? api.getDealers().find(d => d.id === draft.selectedDealerId) || null : null);
-      setCustomerName(draft.customerName || '');
-      setCustomerPhone(draft.customerPhone || '');
-      setCustomerAddress(draft.customerAddress || '');
-      setDiscount(draft.discount || 0);
-      setExtra(draft.extra || 0);
-      setNotes(draft.notes || '');
-      setShowSerials(Boolean(draft.showSerials));
-      setRetailOfficer(draft.retailOfficer || '');
-      setIsQuote(Boolean(draft.isQuote));
-      setRetailPaymentStatus(draft.retailPaymentStatus || 'unpaid');
-      setPartialAmount(draft.partialAmount || 0);
-      setItems(Array.isArray(draft.items) ? draft.items : [emptyItem()]);
-      return;
-    }
-
-    if (editId) {
-      const existingOrder = api.getOrder(editId);
-      if (existingOrder) {
-        loadOrderIntoForm(existingOrder);
+      if (draft) {
+        setOrderDate(draft.orderDate || new Date().toISOString().split('T')[0]);
+        setOrderType(draft.orderType || 'dealer');
+        setInventorySource(draft.inventorySource || 'chittagong');
+        setDealerSearch(draft.dealerSearch || '');
+        setSelectedDealer(draft.selectedDealerId ? dealers.find(d => d.id === draft.selectedDealerId) || null : null);
+        setCustomerName(draft.customerName || '');
+        setCustomerPhone(draft.customerPhone || '');
+        setCustomerAddress(draft.customerAddress || '');
+        setDiscount(draft.discount || 0);
+        setExtra(draft.extra || 0);
+        setNotes(draft.notes || '');
+        setShowSerials(Boolean(draft.showSerials));
+        setRetailOfficer(draft.retailOfficer || '');
+        setIsQuote(Boolean(draft.isQuote));
+        setRetailPaymentStatus(draft.retailPaymentStatus || 'unpaid');
+        setPartialAmount(draft.partialAmount || 0);
+        setItems(Array.isArray(draft.items) ? draft.items : [emptyItem()]);
+        return;
       }
-    }
+
+      if (editId) {
+        const existingOrder = await api.getOrder(editId);
+        if (existingOrder) {
+          loadOrderIntoForm(existingOrder);
+        }
+      }
+    };
+    loadAndInitialize();
   }, [routeOrderId]);
 
   const loadOrderIntoForm = (ord: Order) => {
@@ -406,7 +410,7 @@ export default function NewOrder() {
     setPartialAmount(ord.partialAmount || 0);
 
     if (ord.dealerId) {
-      const dealer = api.getDealers().find(d => d.id === ord.dealerId);
+      const dealer = dealers.find(d => d.id === ord.dealerId);
       if (dealer) setSelectedDealer(dealer);
     } else {
       setCustomerName(ord.customerName || '');
@@ -416,7 +420,7 @@ export default function NewOrder() {
     }
 
     setItems((ord.items || []).map(item => {
-      const product = api.getProducts().find(p => p.id === item.productId);
+      const product = products.find(p => p.id === item.productId);
       const retailPrice = product?.retailPrice ?? (item.basePrice || item.price || 0);
       const commissionPerUnit = product ? product.commission : Number(item.commission || 0) / (item.quantity || 1);
       return {
@@ -532,22 +536,36 @@ export default function NewOrder() {
   }, 0);
   const totalCommission = totalBaseCommission;
 
-  const placeOrder = async (forceQuote = false) => {
-    if (orderType === 'dealer' && !selectedDealer) return showError('Select a dealer');
-    if (orderType === 'retail' && !customerName.trim()) return showError('Enter customer name');
-    if (!filledItems.length) return showError('Add at least one item');
+  const placeOrder = async (forceQuote = false): Promise<string | undefined> => {
+    if (orderType === 'dealer' && !selectedDealer) {
+      showError('Select a dealer');
+      return;
+    }
+    if (orderType === 'retail' && !customerName.trim()) {
+      showError('Enter customer name');
+      return;
+    }
+    if (!filledItems.length) {
+      showError('Add at least one item');
+      return;
+    }
 
     setSaving(true);
     const shouldSaveAsQuote = forceQuote || (isQuote && !editOrderId);
     const isQuoteConversion = !!(editOrderId && originalIsQuote && !shouldSaveAsQuote);
     
     // Generate new order ID: if converting quote, get next order ID, otherwise get new ID
-    let orderId = editOrderId || api.getNextOrderId(shouldSaveAsQuote);
+    let orderId = editOrderId || await api.getNextOrderId(shouldSaveAsQuote);
     if (isQuoteConversion && editOrderId && editOrderId.startsWith('Q')) {
       // Convert quote to order: get next available order ID (maintains proper sequencing)
-      orderId = api.getNextOrderId(false); // false = order, not quote
+      orderId = await api.getNextOrderId(false); // false = order, not quote
       // Delete the old quote order
-      await api.deleteOrder(editOrderId);
+      const deleted = await api.deleteOrder(editOrderId);
+      if (!deleted) {
+        showError('Failed to delete old quote during conversion');
+        setSaving(false);
+        return;
+      }
     }
     
     const shouldAutoApprove = currentUser?.role === 'admin';
@@ -581,7 +599,7 @@ export default function NewOrder() {
       extra: Number(extra) || 0,
       netTotal,
       notes: normalizedNotes,
-      createdBy: api.getCurrentUser()?.id || 'unknown',
+      createdBy: currentUser?.id || 'unknown',
       isQuote: shouldSaveAsQuote,
       retailPaymentStatus: orderType === 'retail' ? retailPaymentStatus : undefined,
       partialAmount: orderType === 'retail' && retailPaymentStatus === 'partial' ? partialAmount : undefined,
@@ -590,24 +608,37 @@ export default function NewOrder() {
       showSerialsOnInvoice: showSerials,
     };
 
-    await api.placeOrder(order);
-    if (shouldAutoApprove && orderStatus === 'pending') {
-      api.approveOrder(order.id, currentUser!.id);
+    const result = await api.placeOrder(order);
+    if (!result.success) {
+      showError(result.message || 'Failed to place order');
+      setSaving(false);
+      return;
     }
+
+    const savedOrder = result.order || order;
+    if (shouldAutoApprove && orderStatus === 'pending') {
+      const approved = await api.approveOrder(savedOrder.id, currentUser!.id);
+      if (!approved) {
+        showError('Order placed but approval failed');
+        setSaving(false);
+        return;
+      }
+    }
+
     showSuccess(shouldSaveAsQuote ? 'Quote saved' : 'Order placed');
     resetForm();
     setSaving(false);
-    return order.id;
+    return savedOrder.id;
   };
 
-  const showQuote = () => {
-    const order = buildOrderData();
+  const showQuote = async () => {
+    const order = await buildOrderData();
     setQuoteHtml(generateInvoiceHtml(order, true, settings));
     setQuoteModal(true);
   };
 
   const downloadQuote = async () => {
-    const order = buildOrderData();
+    const order = await buildOrderData();
     const element = document.createElement('div');
     element.innerHTML = quoteHtml;
     
@@ -620,12 +651,16 @@ export default function NewOrder() {
     };
 
     await html2pdf().set(opt).from(element).save();
-    await placeOrder(true);
-    setQuoteModal(false);
+    const result = await api.placeOrder(order);
+    if (result.success) {
+      setQuoteModal(false);
+    } else {
+      showError(result.message || 'Failed to save quote');
+    }
   };
 
-  const buildOrderData = (): Order => ({
-    id: editOrderId || api.getNextOrderId(true),
+  const buildOrderData = async (): Promise<Order> => ({
+    id: editOrderId || await api.getNextOrderId(true),
     date: orderDate,
     type: orderType,
     status: 'pending',
@@ -651,7 +686,7 @@ export default function NewOrder() {
     extra: Number(extra) || 0,
     netTotal,
     notes,
-    createdBy: api.getCurrentUser()?.id || 'unknown',
+    createdBy: currentUser?.id || 'unknown',
     isQuote: true,
     inventorySource,
     showSerialsOnInvoice: showSerials,
@@ -1004,7 +1039,12 @@ export default function NewOrder() {
                   </button>
                   
                   <button 
-                    onClick={() => { setIsQuote(true); placeOrder(true); setQuoteModal(false); }} 
+                    onClick={async () => {
+                      const savedQuoteId = await placeOrder(true);
+                      if (savedQuoteId) {
+                        setQuoteModal(false);
+                      }
+                    }} 
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-200"
                   >
                     <FileText className="w-4 h-4" /> Save Quote
