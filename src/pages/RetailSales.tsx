@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { showSuccess } from '@/utils/toast';
-import { Plus, BadgePercent, Trash2, History, Landmark, Undo2, CheckCircle2, List, LayoutGrid } from 'lucide-react';
+import { Plus, BadgePercent, Trash2, History, Landmark, Undo2, List, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDisplayDate, getTodayISO } from '@/utils/date';
 
@@ -318,11 +318,6 @@ const RetailSales = () => {
                                 Pay Amount
                               </Button>
                             )}
-                            {canPayToggle && paymentStatus === 'unpaid' && (
-                              <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700" onClick={() => setRetailPaymentStatus(t.orderId!, 'paid')}>
-                                <CheckCircle2 className="w-4 h-4 mr-1" /> Mark Paid
-                              </Button>
-                            )}
                             {canPayToggle && paymentStatus === 'paid' && (
                               <Button variant="outline" size="sm" className="h-8" onClick={() => setRetailPaymentStatus(t.orderId!, 'unpaid')}>
                                 <Undo2 className="w-4 h-4 mr-1" /> Undo
@@ -379,11 +374,6 @@ const RetailSales = () => {
                       {canPayToggle && paymentStatus !== 'paid' && (
                         <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700" onClick={() => openPayDialog(t.orderId!)}>
                           Pay Amount
-                        </Button>
-                      )}
-                      {canPayToggle && paymentStatus === 'unpaid' && (
-                        <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700" onClick={() => setRetailPaymentStatus(t.orderId!, 'paid')}>
-                          <CheckCircle2 className="w-4 h-4 mr-1" /> Mark Paid
                         </Button>
                       )}
                       {canPayToggle && paymentStatus === 'paid' && (
