@@ -634,7 +634,13 @@ export default function NewOrder() {
               } else {
                 updatedProduct.chittagong = Math.max(0, (updatedProduct.chittagong || 0) - item.quantity);
               }
-            }\n            await api.updateProduct(item.productId, updatedProduct);\n          }\n        }\n      }\n    }\n    
+            }
+            await api.updateProduct(item.productId, updatedProduct);
+          }
+        }
+      }
+    }
+    
     if (shouldAutoApprove && orderStatus === 'pending') {
       const approved = await api.approveOrder(savedOrder.id, currentUser!.id);
       if (!approved) {
