@@ -575,8 +575,12 @@ export default function NewOrder() {
       }
     }
     
-    const shouldAutoApprove = currentUser?.role === 'admin';
-    const orderStatus = editOrderId && !isQuoteConversion ? originalOrderStatus : 'pending';
+    const shouldAutoApprove = currentUser?.role === 'admin' && !shouldSaveAsQuote;
+    const orderStatus = shouldAutoApprove
+      ? 'approved'
+      : editOrderId && !isQuoteConversion
+        ? originalOrderStatus
+        : 'pending';
     const normalizedNotes = notes || '';
     const order: Order = {
       id: orderId,
