@@ -362,6 +362,9 @@ export default function NewOrder() {
       const draft = draftJson ? JSON.parse(draftJson) : null;
 
       if (draft) {
+        if (editId) {
+          setEditOrderId(editId);
+        }
         setOrderDate(draft.orderDate || new Date().toISOString().split('T')[0]);
         setOrderType(draft.orderType || 'dealer');
         setInventorySource(draft.inventorySource || 'chittagong');
@@ -616,31 +619,7 @@ export default function NewOrder() {
     }
 
     const savedOrder = result.order || order;
-    
-    // Deduct stock from products for non-quote orders
-    if (!shouldSaveAsQuote && !isQuoteConversion) {
-      for (const item of filledItems) {
-        if (item.productId) {
-          const currentProduct = products.find(p => p.id === item.productId);
-          if (currentProduct) {
-            let updatedProduct = { ...currentProduct };
-            if (inventorySource === 'dhaka') {
-              updatedProduct.dhaka = Math.max(0, (updatedProduct.dhaka || 0) - item.quantity);
-            } else if (inventorySource === 'chittagong') {
-              updatedProduct.chittagong = Math.max(0, (updatedProduct.chittagong || 0) - item.quantity);
-            } else if (inventorySource === 'mixed' && item.location) {
-              if (item.location === 'dhaka') {
-                updatedProduct.dhaka = Math.max(0, (updatedProduct.dhaka || 0) - item.quantity);
-              } else {
-                updatedProduct.chittagong = Math.max(0, (updatedProduct.chittagong || 0) - item.quantity);
-              }
-            }
-            await api.updateProduct(item.productId, updatedProduct);
-          }
-        }
-      }
-    }
-    
+
     if (shouldAutoApprove && orderStatus === 'pending') {
       const approved = await api.approveOrder(savedOrder.id, currentUser!.id);
       if (!approved) {

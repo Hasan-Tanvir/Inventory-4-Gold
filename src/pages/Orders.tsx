@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, Clock, Search, Edit, Trash2, List, LayoutGrid, Eye } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { showSuccess } from '@/utils/toast';
+import { showSuccess, showError } from '@/utils/toast';
 import { formatDisplayDate } from '@/utils/date';
 import { cn } from '@/lib/utils';
 import { generateInvoiceHtml, printDoc } from '@/utils/invoice-generator';
@@ -37,13 +37,29 @@ const Orders = () => {
 
   const handleApprove = async (id: string) => {
     if (!user) return;
-    await api.approveOrder(id, user.id);
+    // Optimistic UI: update local state immediately
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'approved' as const, approvedBy: user.id } : o));
+    const approved = await api.approveOrder(id, user.id);
+    if (!approved) {
+      // Revert on failure
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'pending' as const, approvedBy: undefined } : o));
+      return showError('Failed to approve order');
+    }
+    // Refresh from server to ensure consistency
     setOrders(await api.getOrders());
     showSuccess("Order approved and stock updated.");
   };
 
   const handleReject = async (id: string) => {
-    await api.rejectOrder(id);
+    // Optimistic UI: update local state immediately
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'rejected' as const } : o));
+    const rejected = await api.rejectOrder(id);
+    if (!rejected) {
+      // Revert on failure
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'pending' as const } : o));
+      return showError('Failed to reject order');
+    }
+    // Refresh from server
     setOrders(await api.getOrders());
     showSuccess("Order rejected");
   };

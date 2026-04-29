@@ -271,29 +271,15 @@ const getProducts = async (): Promise<Product[]> => {
   }));
 };
 
-const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
+const getProduct = async (id: string): Promise<Product | null> => {
   const { data, error } = await supabase
     .from('products')
-    .insert({
-      name: product.name,
-      version: product.version,
-      category_id: product.categoryId,
-      retail_price: product.retailPrice,
-      commission: product.commission,
-      status: product.status,
-      dhaka: product.dhaka,
-      chittagong: product.chittagong,
-      slabs: product.slabs,
-      user_id: user.id,
-    })
-    .select()
+    .select('*')
+    .eq('id', id)
     .single();
 
-  if (error) {
-    console.error('Error saving product:', error);
+  if (error || !data) {
+    if (error) console.error('Error fetching product:', error);
     return null;
   }
 
@@ -309,6 +295,184 @@ const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null
     chittagong: data.chittagong,
     slabs: data.slabs,
   };
+};
+
+const adjustProductStock = async (productId: string, location: 'dhaka' | 'chittagong', delta: number): Promise<boolean> => {
+  const product = await getProduct(productId);
+  if (!product) return false;
+
+  const currentQty = product[location] || 0;
+  const updatedQty = currentQty + delta;
+  if (updatedQty < 0) {
+    console.error('Insufficient stock for adjustment:', { productId, location, currentQty, delta });
+    return false;
+  }
+
+  const { error } = await supabase
+    .from('products')
+    .update({ [location]: updatedQty })
+    .eq('id', productId);
+
+  if (error) {
+    console.error('Error adjusting product stock:', error);
+    return false;
+  }
+
+  return true;
+};
+
+const getOrderInventoryMap = (items: OrderItem[], inventorySource: 'dhaka' | 'chittagong' | 'mixed'): Map<string, number> => {
+  const map = new Map<string, number>();
+
+  items.forEach(item => {
+    if (!item.productId) return;
+    const location = inventorySource === 'mixed' ? item.location : inventorySource;
+    const key = `${item.productId}:${location}`;
+    map.set(key, (map.get(key) || 0) + (item.quantity || 0));
+  });
+
+  return map;
+};
+
+const applyOrderStockDelta = async (originalOrder: Order | null, updatedOrder: Order): Promise<boolean> => {
+  const originalApproved = originalOrder?.status === 'approved';
+  const updatedApproved = updatedOrder.status === 'approved';
+
+  if (!originalApproved && !updatedApproved) {
+    return true;
+  }
+
+  if (originalApproved && !updatedApproved) {
+    const originalMap = getOrderInventoryMap(originalOrder!.items, originalOrder!.inventorySource);
+    for (const [key, qty] of originalMap.entries()) {
+      const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
+      if (!(await adjustProductStock(productId, location, qty))) return false;
+    }
+    return true;
+  }
+
+  if (!originalApproved && updatedApproved) {
+    const newMap = getOrderInventoryMap(updatedOrder.items, updatedOrder.inventorySource);
+    for (const [key, qty] of newMap.entries()) {
+      const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
+      if (!(await adjustProductStock(productId, location, -qty))) return false;
+    }
+    return true;
+  }
+
+  const originalMap = getOrderInventoryMap(originalOrder!.items, originalOrder!.inventorySource);
+  const newMap = getOrderInventoryMap(updatedOrder.items, updatedOrder.inventorySource);
+  const allKeys = new Set<string>([...originalMap.keys(), ...newMap.keys()]);
+
+  for (const key of allKeys) {
+    const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
+    const originalQty = originalMap.get(key) || 0;
+    const newQty = newMap.get(key) || 0;
+    const delta = newQty - originalQty;
+    if (delta === 0) continue;
+    if (!(await adjustProductStock(productId, location, -delta))) return false;
+  }
+
+  return true;
+};
+
+const createCommissionTokenForOrder = async (order: Order): Promise<boolean> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const existing = await supabase
+    .from('commission_tokens')
+    .select('id')
+    .eq('order_id', order.id)
+    .maybeSingle();
+
+  if (existing.error) {
+    console.error('Error checking existing commission token:', existing.error);
+    return false;
+  }
+
+  if (existing.data) {
+    return true;
+  }
+
+  const amount = order.items.reduce((sum, item) => sum + Number(item.commission || 0), 0);
+  if (amount <= 0) return true;
+
+  const { error } = await supabase
+    .from('commission_tokens')
+    .insert({
+      order_id: order.id,
+      date: order.date,
+      amount,
+      status: 'pending',
+      user_id: user.id,
+    });
+
+  if (error) {
+    console.error('Error creating commission token:', error);
+    return false;
+  }
+
+  return true;
+};
+
+const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // For new products with initial quantity, create stock entries instead of setting dhaka/chittagong directly
+  const isNew = !product.id;
+  const initialDhaka = isNew ? product.dhaka : 0;
+  const initialChittagong = isNew ? product.chittagong : 0;
+
+  const { data, error } = await supabase
+    .from('products')
+    .insert({
+      name: product.name,
+      version: product.version,
+      category_id: product.categoryId,
+      retail_price: product.retailPrice,
+      commission: product.commission,
+      status: product.status,
+      dhaka: 0, // Start at 0, add via stock entries
+      chittagong: 0,
+      slabs: product.slabs,
+      user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving product:', error);
+    return null;
+  }
+
+  // Create initial stock entries
+  if (initialDhaka > 0) {
+    await saveProductStockEntry({
+      entryId: `INIT-${data.id}-DHK`,
+      productId: data.id,
+      productName: data.name,
+      date: new Date().toISOString().split('T')[0],
+      location: 'dhaka',
+      quantity: initialDhaka,
+      note: 'Initial stock on product creation'
+    });
+  }
+  if (initialChittagong > 0) {
+    await saveProductStockEntry({
+      entryId: `INIT-${data.id}-CTG`,
+      productId: data.id,
+      productName: data.name,
+      date: new Date().toISOString().split('T')[0],
+      location: 'chittagong',
+      quantity: initialChittagong,
+      note: 'Initial stock on product creation'
+    });
+  }
+
+  // Re-fetch to get updated stock
+  return await getProduct(data.id);
 };
 
 const updateProduct = async (id: string, product: Partial<Product>): Promise<boolean> => {
@@ -376,6 +540,29 @@ const getDealers = async (): Promise<Dealer[]> => {
     balance: dealer.balance,
     officerId: dealer.officer_id,
   }));
+};
+
+const getDealer = async (id: string): Promise<Dealer | null> => {
+  const { data, error } = await supabase
+    .from('dealers')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    if (error) console.error('Error fetching dealer:', error);
+    return null;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    address: data.address,
+    phone: data.phone,
+    officerName: data.officer_name,
+    balance: data.balance,
+    officerId: data.officer_id,
+  };
 };
 
 const saveDealer = async (dealer: Omit<Dealer, 'id'>): Promise<Dealer | null> => {
@@ -871,6 +1058,13 @@ const searchBySerial = async (serial: string): Promise<{ order: Order; item: any
 };
 
 const approveOrder = async (id: string, approvedBy: string): Promise<boolean> => {
+  const existingOrder = await getOrder(id);
+  if (!existingOrder) return false;
+  if (existingOrder.status === 'approved') return true;
+
+  const stockAdjusted = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'approved' });
+  if (!stockAdjusted) return false;
+
   const { error } = await supabase
     .from('orders')
     .update({ status: 'approved', approved_by: approvedBy })
@@ -881,10 +1075,24 @@ const approveOrder = async (id: string, approvedBy: string): Promise<boolean> =>
     return false;
   }
 
+  if (existingOrder.type === 'retail') {
+    await syncRetailSalesFromApprovedOrders();
+  }
+
+  await createCommissionTokenForOrder({ ...existingOrder, status: 'approved' });
+
   return true;
 };
 
 const rejectOrder = async (id: string): Promise<boolean> => {
+  const existingOrder = await getOrder(id);
+  if (!existingOrder) return false;
+
+  if (existingOrder.status === 'approved') {
+    const stockRestored = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'rejected' });
+    if (!stockRestored) return false;
+  }
+
   const { error } = await supabase
     .from('orders')
     .update({ status: 'rejected' })
@@ -899,16 +1107,17 @@ const rejectOrder = async (id: string): Promise<boolean> => {
 };
 
 const placeOrder = async (order: Order): Promise<{ success: boolean; order?: Order; message?: string }> => {
-  if (!order.id) {
-    const saved = await saveOrder(order);
-    if (!saved) return { success: false, message: 'Failed to save order' };
-    return { success: true, order: saved };
-  }
+  const existingOrder = order.id ? await getOrder(order.id) : null;
 
-  const existingOrder = await getOrder(order.id);
-  if (!existingOrder) {
+  if (!order.id || !existingOrder) {
     const saved = await saveOrder(order);
     if (!saved) return { success: false, message: 'Failed to save order' };
+
+    if (order.status === 'approved') {
+      const stockAdjusted = await applyOrderStockDelta(null, order);
+      if (!stockAdjusted) return { success: false, message: 'Failed to adjust stock for approved order' };
+    }
+
     return { success: true, order: saved };
   }
 
@@ -949,7 +1158,114 @@ const placeOrder = async (order: Order): Promise<{ success: boolean; order?: Ord
     return { success: false, message: 'Failed to update order items' };
   }
 
+  const stockAdjusted = await applyOrderStockDelta(existingOrder, order);
+  if (!stockAdjusted) {
+    return { success: false, message: 'Failed to adjust stock for order update' };
+  }
+
   return { success: true, order };
+};
+
+const disburseTargetReward = async (
+  targetId: string,
+  dealerId: string,
+  officerId?: string,
+  officerName?: string
+): Promise<{ success: boolean; message?: string }> => {
+  const target = await getTarget(targetId);
+  if (!target) return { success: false, message: 'Target not found' };
+  if (target.status !== 'active') return { success: false, message: 'Target is not active' };
+
+  const { data: orders, error: ordersError } = await supabase
+    .from('orders')
+    .select('id, subtotal, net_total, status, is_quote, dealer_id, date')
+    .eq('status', 'approved')
+    .eq('dealer_id', dealerId);
+
+  if (ordersError) {
+    console.error('Error fetching orders for target reward:', ordersError);
+    return { success: false, message: ordersError.message };
+  }
+
+  const orderIds = (orders || []).map((order: any) => order.id);
+  const { data: items, error: itemsError } = await supabase
+    .from('order_items')
+    .select('product_id, quantity, total, order_id')
+    .in('order_id', orderIds)
+    .order('created_at', { ascending: false });
+
+  if (itemsError) {
+    console.error('Error fetching order items for target reward:', itemsError);
+    return { success: false, message: itemsError.message };
+  }
+
+  const relevantItems = (items || []).filter((item: any) =>
+    !target.productIds.length || target.productIds.includes(item.product_id)
+  );
+  const current = target.type === 'quantity'
+    ? relevantItems.reduce((sum, item: any) => sum + Number(item.quantity || 0), 0)
+    : relevantItems.reduce((sum, item: any) => sum + Number(item.total || 0), 0);
+
+  const disbursedCycles = (target.rewardDisbursed || {})[dealerId] || 0;
+  const achievedCycles = Math.floor(current / Math.max(1, target.targetValue));
+  const eligibleCycles = Math.max(0, achievedCycles - disbursedCycles);
+  if (eligibleCycles <= 0) {
+    return { success: false, message: 'No eligible reward cycle available' };
+  }
+
+  let amount = 0;
+  if (target.rewardType === 'percentage') {
+    amount = Math.round(current * (target.rewardValue / 100));
+  } else {
+    amount = Number(target.rewardValue || 0) * eligibleCycles;
+  }
+
+  const rewardRef = `TR-${Date.now()}`;
+  const dealer = await getDealer(dealerId);
+  const dealerName = dealer?.name || target.dealerName || 'Dealer';
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('target_rewards')
+    .insert({
+      reward_ref: rewardRef,
+      target_id: targetId,
+      target_name: target.name,
+      dealer_id: dealerId,
+      dealer_name: dealerName,
+      officer_id: officerId,
+      officer_name: officerName || '',
+      date: new Date().toISOString().split('T')[0],
+      cycles: eligibleCycles,
+      amount,
+      payment_id: null,
+      note: `Reward cycles: ${eligibleCycles}`,
+      status: 'active',
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error('Error inserting target reward:', insertError);
+    return { success: false, message: insertError.message };
+  }
+
+  const updatedRewardDisbursed = {
+    ...(target.rewardDisbursed || {}),
+    [dealerId]: disbursedCycles + eligibleCycles,
+  };
+
+  const { error: targetUpdateError } = await supabase
+    .from('targets')
+    .update({ reward_disbursed: updatedRewardDisbursed })
+    .eq('id', targetId);
+
+  if (targetUpdateError) {
+    console.error('Error updating target reward disbursement:', targetUpdateError);
+    return { success: false, message: targetUpdateError.message };
+  }
+
+  return { success: true };
 };
 
 const getTargetRewards = async (): Promise<TargetReward[]> => {
@@ -1029,15 +1345,22 @@ const syncRetailSalesFromApprovedOrders = async (): Promise<{ success: boolean; 
     return { success: false, message: ordersError.message };
   }
 
-  const { data: existingTransactions } = await supabase
+  const { data: existingTransactions, error: existingError } = await supabase
     .from('retail_transactions')
-    .select('order_id');
+    .select('id, order_id');
 
-  const existingOrderIds = new Set(existingTransactions?.map((row: any) => row.order_id));
+  if (existingError) {
+    console.error('Error fetching retail transactions:', existingError);
+    return { success: false, message: existingError.message };
+  }
 
-  const transactionsToInsert = approvedOrders
-    .filter((order: any) => !existingOrderIds.has(order.id))
-    .map((order: any) => ({
+  const transactionMap = new Map<string, string>();
+  (existingTransactions || []).forEach((row: any) => {
+    if (row.order_id) transactionMap.set(row.order_id, row.id);
+  });
+
+  for (const order of approvedOrders || []) {
+    const transactionPayload = {
       order_id: order.id,
       date: order.date,
       detail: `Retail sale ${order.id}`,
@@ -1047,16 +1370,28 @@ const syncRetailSalesFromApprovedOrders = async (): Promise<{ success: boolean; 
       location: order.inventory_source,
       type: 'sale',
       user_id: order.created_by,
-    }));
+    };
 
-  if (transactionsToInsert.length > 0) {
-    const { error: insertError } = await supabase
-      .from('retail_transactions')
-      .insert(transactionsToInsert);
+    if (transactionMap.has(order.id)) {
+      const transactionId = transactionMap.get(order.id)!;
+      const { error: updateError } = await supabase
+        .from('retail_transactions')
+        .update(transactionPayload)
+        .eq('id', transactionId);
 
-    if (insertError) {
-      console.error('Error syncing retail sales:', insertError);
-      return { success: false, message: insertError.message };
+      if (updateError) {
+        console.error('Error updating retail transaction:', updateError);
+        return { success: false, message: updateError.message };
+      }
+    } else {
+      const { error: insertError } = await supabase
+        .from('retail_transactions')
+        .insert(transactionPayload);
+
+      if (insertError) {
+        console.error('Error inserting retail transaction:', insertError);
+        return { success: false, message: insertError.message };
+      }
     }
   }
 
@@ -1072,7 +1407,9 @@ const setRetailOrderPaymentStatus = async (
     retail_payment_status: status,
   };
 
-  if (typeof paidAmount === 'number') {
+  if (status === 'unpaid') {
+    updates.partial_amount = 0;
+  } else if (typeof paidAmount === 'number') {
     updates.partial_amount = paidAmount;
   }
 
@@ -1144,7 +1481,11 @@ const saveSendAmount = async (entry: Omit<SendAmountEntry, 'id'>): Promise<SendA
   };
 };
 
-const saveProductStockEntries = async (entries: Omit<ProductStockEntry, 'id'>[]): Promise<ProductStockEntry[] | null> => {
+const saveProductStockEntries = async (
+  entries: Omit<ProductStockEntry, 'id'>[],
+  options?: { applyToInventory?: boolean }
+): Promise<ProductStockEntry[] | null> => {
+  const applyToInventory = options?.applyToInventory ?? true;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -1168,6 +1509,19 @@ const saveProductStockEntries = async (entries: Omit<ProductStockEntry, 'id'>[])
   if (error) {
     console.error('Error saving product stock entries:', error);
     return null;
+  }
+
+  if (applyToInventory) {
+    const adjustmentMap = new Map<string, number>();
+    payload.forEach(entry => {
+      const key = `${entry.product_id}:${entry.location}`;
+      adjustmentMap.set(key, (adjustmentMap.get(key) || 0) + entry.quantity);
+    });
+
+    for (const [key, qty] of adjustmentMap.entries()) {
+      const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
+      await adjustProductStock(productId, location, qty);
+    }
   }
 
   return data.map(entry => ({
@@ -1195,42 +1549,116 @@ const getCommissionTokens = async (): Promise<any[]> => {
   }
 
   return data.map(token => ({
-    ...token,
+    id: token.id,
+    orderId: token.order_id,
+    date: token.date,
     amount: Number(token.amount),
+    status: token.status,
+    disbursedDate: token.disbursed_date,
+    officerId: token.officer_id,
+    userId: token.user_id,
   }));
 };
 
-const disburseCommissionToken = async (officerId: string, tokenId: string): Promise<{ success: boolean; message?: string }> => {
-  const { error } = await supabase
+const disburseCommissionToken = async (tokenId: string): Promise<{ success: boolean; message?: string }> => {
+  // Get the token to find the officer
+  const { data: token, error: tokenError } = await supabase
+    .from('commission_tokens')
+    .select('amount, user_id')
+    .eq('id', tokenId)
+    .single();
+
+  if (tokenError || !token) {
+    return { success: false, message: 'Token not found' };
+  }
+
+  // Find the officer by user_id (assuming officer has user_id)
+  const { data: officerData, error: officerError } = await supabase
+    .from('officers')
+    .select('id, commission_balance')
+    .eq('user_id', token.user_id)
+    .single();
+
+  if (officerError || !officerData) {
+    return { success: false, message: 'Officer not found' };
+  }
+
+  // Update token status
+  const { error: updateError } = await supabase
     .from('commission_tokens')
     .update({ status: 'disbursed', disbursed_date: new Date().toISOString().split('T')[0] })
-    .eq('id', tokenId)
-    .eq('officer_id', officerId);
+    .eq('id', tokenId);
 
-  if (error) {
-    console.error('Error disbursing commission token:', error);
-    return { success: false, message: error.message };
+  if (updateError) {
+    console.error('Error disbursing commission token:', updateError);
+    return { success: false, message: updateError.message };
+  }
+
+  // Add to officer's commission balance
+  const newBalance = (officerData.commission_balance || 0) + token.amount;
+  const { error: balanceError } = await supabase
+    .from('officers')
+    .update({ commission_balance: newBalance })
+    .eq('id', officerData.id);
+
+  if (balanceError) {
+    console.error('Error updating officer balance:', balanceError);
+    return { success: false, message: balanceError.message };
   }
 
   return { success: true };
 };
 
-const undoCommissionTokenDisbursement = async (officerId: string, tokenId: string): Promise<{ success: boolean; message?: string }> => {
-  const { error } = await supabase
+const undoCommissionTokenDisbursement = async (tokenId: string): Promise<{ success: boolean; message?: string }> => {
+  // Get the token to find the officer
+  const { data: token, error: tokenError } = await supabase
+    .from('commission_tokens')
+    .select('amount, user_id')
+    .eq('id', tokenId)
+    .single();
+
+  if (tokenError || !token) {
+    return { success: false, message: 'Token not found' };
+  }
+
+  // Find the officer
+  const { data: officerData, error: officerError } = await supabase
+    .from('officers')
+    .select('id, commission_balance')
+    .eq('user_id', token.user_id)
+    .single();
+
+  if (officerError || !officerData) {
+    return { success: false, message: 'Officer not found' };
+  }
+
+  // Update token status
+  const { error: updateError } = await supabase
     .from('commission_tokens')
     .update({ status: 'pending', disbursed_date: null })
-    .eq('id', tokenId)
-    .eq('officer_id', officerId);
+    .eq('id', tokenId);
 
-  if (error) {
-    console.error('Error undoing commission token disbursement:', error);
-    return { success: false, message: error.message };
+  if (updateError) {
+    console.error('Error undoing commission token disbursement:', updateError);
+    return { success: false, message: updateError.message };
+  }
+
+  // Subtract from officer's commission balance
+  const newBalance = Math.max(0, (officerData.commission_balance || 0) - token.amount);
+  const { error: balanceError } = await supabase
+    .from('officers')
+    .update({ commission_balance: newBalance })
+    .eq('id', officerData.id);
+
+  if (balanceError) {
+    console.error('Error updating officer balance:', balanceError);
+    return { success: false, message: balanceError.message };
   }
 
   return { success: true };
 };
 
-const updateCommissionToken = async (officerId: string, tokenId: string, updates: { amount?: number; status?: string }): Promise<boolean> => {
+const updateCommissionToken = async (tokenId: string, updates: { amount?: number; status?: string }): Promise<boolean> => {
   const payload: any = {};
   if (typeof updates.amount === 'number') payload.amount = updates.amount;
   if (updates.status) payload.status = updates.status;
@@ -1238,8 +1666,7 @@ const updateCommissionToken = async (officerId: string, tokenId: string, updates
   const { error } = await supabase
     .from('commission_tokens')
     .update(payload)
-    .eq('id', tokenId)
-    .eq('officer_id', officerId);
+    .eq('id', tokenId);
 
   if (error) {
     console.error('Error updating commission token:', error);
@@ -1249,12 +1676,11 @@ const updateCommissionToken = async (officerId: string, tokenId: string, updates
   return true;
 };
 
-const deleteCommissionToken = async (officerId: string, tokenId: string): Promise<boolean> => {
+const deleteCommissionToken = async (tokenId: string): Promise<boolean> => {
   const { error } = await supabase
     .from('commission_tokens')
     .delete()
-    .eq('id', tokenId)
-    .eq('officer_id', officerId);
+    .eq('id', tokenId);
 
   if (error) {
     console.error('Error deleting commission token:', error);
@@ -1396,6 +1822,38 @@ const getTargets = async (): Promise<Target[]> => {
     rewardedDealerIds: target.rewarded_dealer_ids,
     rewardDisbursed: target.reward_disbursed,
   }));
+};
+
+const getTarget = async (id: string): Promise<Target | null> => {
+  const { data, error } = await supabase
+    .from('targets')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    if (error) console.error('Error fetching target:', error);
+    return null;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    dealerId: data.dealer_id,
+    dealerName: data.dealer_name,
+    type: data.type,
+    productIds: data.product_ids,
+    targetValue: data.target_value,
+    currentValue: data.current_value,
+    startDate: data.start_date,
+    endDate: data.end_date,
+    rewardType: data.reward_type,
+    rewardValue: data.reward_value,
+    status: data.status,
+    assignedOfficerId: data.assigned_officer_id,
+    rewardedDealerIds: data.rewarded_dealer_ids,
+    rewardDisbursed: data.reward_disbursed,
+  };
 };
 
 const saveTarget = async (target: Omit<Target, 'id'>): Promise<Target | null> => {
@@ -1634,6 +2092,18 @@ const saveProductStockEntry = async (entry: Omit<ProductStockEntry, 'id'>): Prom
     return null;
   }
 
+  // Update product inventory
+  const product = await getProduct(entry.productId);
+  if (product) {
+    const updatedProduct = { ...product };
+    if (entry.location === 'dhaka') {
+      updatedProduct.dhaka += entry.quantity;
+    } else if (entry.location === 'chittagong') {
+      updatedProduct.chittagong += entry.quantity;
+    }
+    await saveProduct(updatedProduct);
+  }
+
   return {
     id: data.id,
     entryId: data.entry_id,
@@ -1709,9 +2179,13 @@ const getProductStockTransfers = async (): Promise<ProductStockTransfer[]> => {
   }));
 };
 
-const saveProductStockTransfer = async (transfer: Omit<ProductStockTransfer, 'id'>): Promise<ProductStockTransfer | null> => {
+const saveProductStockTransfer = async (transfer: Omit<ProductStockTransfer, 'id'>): Promise<{ success: boolean; transfer?: ProductStockTransfer; message?: string }> => {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { success: false, message: 'No authenticated user' };
+
+  if (transfer.from === transfer.to) {
+    return { success: false, message: 'Source and destination must be different' };
+  }
 
   const { data, error } = await supabase
     .from('product_stock_transfers')
@@ -1731,23 +2205,84 @@ const saveProductStockTransfer = async (transfer: Omit<ProductStockTransfer, 'id
 
   if (error) {
     console.error('Error saving product stock transfer:', error);
-    return null;
+    return { success: false, message: error.message };
+  }
+
+  const fromAdjusted = await adjustProductStock(transfer.productId, transfer.from, -transfer.quantity);
+  const toAdjusted = await adjustProductStock(transfer.productId, transfer.to, transfer.quantity);
+
+  if (!fromAdjusted || !toAdjusted) {
+    if (fromAdjusted) {
+      await adjustProductStock(transfer.productId, transfer.from, transfer.quantity);
+    }
+    if (toAdjusted) {
+      await adjustProductStock(transfer.productId, transfer.to, -transfer.quantity);
+    }
+    return { success: false, message: 'Failed to adjust product stock after transfer' };
+  }
+
+  if (!data) {
+    return { success: false, message: 'Stock transfer could not be created' };
   }
 
   return {
-    id: data.id,
-    transferId: data.transfer_id,
-    date: data.date,
-    productId: data.product_id,
-    productName: data.product_name,
-    from: data.from_location,
-    to: data.to_location,
-    quantity: data.quantity,
-    note: data.note,
+    success: true,
+    transfer: {
+      id: data.id,
+      transferId: data.transfer_id,
+      date: data.date,
+      productId: data.product_id,
+      productName: data.product_name,
+      from: data.from_location,
+      to: data.to_location,
+      quantity: data.quantity,
+      note: data.note,
+    }
   };
 };
 
 const updateProductStockTransfer = async (id: string, transfer: Partial<ProductStockTransfer>): Promise<boolean> => {
+  const { data: existing, error: existingError } = await supabase
+    .from('product_stock_transfers')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (existingError || !existing) {
+    console.error('Error fetching existing product stock transfer:', existingError);
+    return false;
+  }
+
+  const oldProductId = existing.product_id;
+  const oldFrom = existing.from_location as 'dhaka' | 'chittagong';
+  const oldTo = existing.to_location as 'dhaka' | 'chittagong';
+  const oldQuantity = existing.quantity;
+
+  const revertedFrom = await adjustProductStock(oldProductId, oldFrom, oldQuantity);
+  const revertedTo = await adjustProductStock(oldProductId, oldTo, -oldQuantity);
+
+  if (!revertedFrom || !revertedTo) {
+    if (revertedFrom) await adjustProductStock(oldProductId, oldFrom, -oldQuantity);
+    if (revertedTo) await adjustProductStock(oldProductId, oldTo, oldQuantity);
+    return false;
+  }
+
+  const newProductId = transfer.productId || oldProductId;
+  const newFrom = transfer.from || oldFrom;
+  const newTo = transfer.to || oldTo;
+  const newQuantity = typeof transfer.quantity === 'number' ? transfer.quantity : oldQuantity;
+
+  const appliedFrom = await adjustProductStock(newProductId, newFrom, -newQuantity);
+  const appliedTo = await adjustProductStock(newProductId, newTo, newQuantity);
+
+  if (!appliedFrom || !appliedTo) {
+    if (appliedFrom) await adjustProductStock(newProductId, newFrom, newQuantity);
+    if (appliedTo) await adjustProductStock(newProductId, newTo, -newQuantity);
+    await adjustProductStock(oldProductId, oldFrom, -oldQuantity);
+    await adjustProductStock(oldProductId, oldTo, oldQuantity);
+    return false;
+  }
+
   const { error } = await supabase
     .from('product_stock_transfers')
     .update({
@@ -1771,6 +2306,31 @@ const updateProductStockTransfer = async (id: string, transfer: Partial<ProductS
 };
 
 const deleteProductStockTransfer = async (id: string): Promise<boolean> => {
+  const { data: existing, error: existingError } = await supabase
+    .from('product_stock_transfers')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (existingError || !existing) {
+    console.error('Error fetching product stock transfer to delete:', existingError);
+    return false;
+  }
+
+  const productId = existing.product_id;
+  const from = existing.from_location as 'dhaka' | 'chittagong';
+  const to = existing.to_location as 'dhaka' | 'chittagong';
+  const quantity = existing.quantity;
+
+  const restoredFrom = await adjustProductStock(productId, from, quantity);
+  const reversedTo = await adjustProductStock(productId, to, -quantity);
+
+  if (!restoredFrom || !reversedTo) {
+    if (restoredFrom) await adjustProductStock(productId, from, -quantity);
+    if (reversedTo) await adjustProductStock(productId, to, quantity);
+    return false;
+  }
+
   const { error } = await supabase
     .from('product_stock_transfers')
     .delete()

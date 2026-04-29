@@ -142,6 +142,16 @@ const Targets = () => {
     showSuccess('Target renewed for next batch');
   };
 
+  const handleDisburseReward = async (targetId: string) => {
+    const result = await api.disburseTargetReward(targetId);
+    if (!result.success) {
+      showError(result.message || 'Failed to disburse reward');
+      return;
+    }
+    setTargets(await api.getTargets());
+    showSuccess('Reward disbursed successfully');
+  };
+
   const selectableProducts = products.filter(p =>
     p.name.toLowerCase().includes(productSearch.toLowerCase())
   );
@@ -321,6 +331,9 @@ const Targets = () => {
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleReapply(t)}><RefreshCw className="w-3.5 h-3.5" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => handleRenewBatch(t)} title="Renew next batch"><TargetIcon className="w-3.5 h-3.5" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={async () => { if(confirm('Delete?')) { await api.deleteTarget(t.id); setTargets(await api.getTargets()); } }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          {progress >= 100 && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => handleDisburseReward(t.id)} title="Disburse Reward"><Trophy className="w-3.5 h-3.5" /></Button>
+                          )}
                         </div>
                         <div className="text-xs font-black text-emerald-600">
                           {rewardType === 'percentage' ? `${rewardValue}%` : `৳${rewardValue.toLocaleString()}`}

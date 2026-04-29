@@ -304,6 +304,10 @@ const Products = () => {
 
   const handleSaveStockTransfer = async () => {
     if (!stockTransferForm.productId || !stockTransferForm.quantity) return;
+    if (stockTransferForm.from === stockTransferForm.to) {
+      showError('Source and destination must be different');
+      return;
+    }
     const product = products.find(p => p.id === stockTransferForm.productId);
     if (!product) return;
 
@@ -318,8 +322,8 @@ const Products = () => {
       note: stockTransferForm.note
     });
 
-    if (!result.success) {
-      showError(result.message || 'Could not transfer stock');
+    if (!result || !result.success) {
+      showError(result?.message || 'Could not transfer stock');
       return;
     }
 

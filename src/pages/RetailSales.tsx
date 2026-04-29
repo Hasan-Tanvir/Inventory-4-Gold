@@ -282,10 +282,9 @@ const RetailSales = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions.map((t) => {
-                    const isGenerated = t.id.startsWith('RTX-ORD-');
                     const paymentStatus = t.paymentStatus || 'paid';
-                    const canPayToggle = isGenerated && t.type === 'sale' && t.orderId;
-                    const canDelete = !isGenerated;
+                    const canPayToggle = t.type === 'sale' && !!t.orderId;
+                    const canDelete = !t.orderId;
                     return (
                       <TableRow key={t.id} className="hover:bg-slate-50/50 transition-colors group">
                         <TableCell className="text-[10px] text-slate-500 py-2.5 whitespace-nowrap">{formatDisplayDate(t.date)}</TableCell>
@@ -319,7 +318,7 @@ const RetailSales = () => {
                               </Button>
                             )}
                             {canPayToggle && paymentStatus === 'paid' && (
-                              <Button variant="outline" size="sm" className="h-8" onClick={() => setRetailPaymentStatus(t.orderId!, 'unpaid')}>
+                              <Button variant="outline" size="sm" className="h-8" onClick={() => setRetailPaymentStatus(t.orderId!, 'unpaid', 0)}>
                                 <Undo2 className="w-4 h-4 mr-1" /> Undo
                               </Button>
                             )}
@@ -344,10 +343,9 @@ const RetailSales = () => {
 
             <div className={cn("p-3 space-y-2 sm:hidden", historyView === 'cards' ? "block" : "hidden")}>
               {filteredTransactions.map((t) => {
-                const isGenerated = t.id.startsWith('RTX-ORD-');
                 const paymentStatus = t.paymentStatus || 'paid';
-                const canPayToggle = isGenerated && t.type === 'sale' && t.orderId;
-                const canDelete = !isGenerated;
+                const canPayToggle = t.type === 'sale' && !!t.orderId;
+                const canDelete = !t.orderId;
                 return (
                   <div key={t.id} className="rounded-xl border bg-white p-3 space-y-2">
                     <div className="flex items-center justify-between">

@@ -67,31 +67,33 @@ const Officers = () => {
 
   const disburse = async (token: any) => {
     if (!confirm(`Mark ৳${token.amount.toLocaleString()} as disbursed to ${token.officerName}?`)) return;
-    // Note: disburseCommissionToken not implemented in new API yet
-    // await api.disburseCommissionToken(token.officerId, token.id);
+    const result = await api.disburseCommissionToken(token.id);
+    if (!result.success) return showError(result.message || 'Could not disburse token');
     await load();
   };
 
   const undoDisburse = async (token: any) => {
     if (!confirm('Undo disbursement?')) return;
-    // Note: undoCommissionTokenDisbursement not implemented in new API yet
-    // await api.undoCommissionTokenDisbursement(token.officerId, token.id);
+    const result = await api.undoCommissionTokenDisbursement(token.id);
+    if (!result.success) return showError(result.message || 'Could not undo disbursement');
     await load();
   };
 
   const saveEditToken = async () => {
-    // Note: updateCommissionToken not implemented in new API yet
-    // await api.updateCommissionToken(editToken.officerId, editToken.id, {
-    //   amount: Number(editToken.amount) || 0
-    // });
+    if (!editToken) return;
+    const success = await api.updateCommissionToken(editToken.id, {
+      amount: Number(editToken.amount) || 0,
+      status: editToken.status
+    });
+    if (!success) return showError('Could not update token');
     setEditToken(null);
     await load();
   };
 
   const deleteToken = async (token: any) => {
     if (!confirm('Delete this token?')) return;
-    // Note: deleteCommissionToken not implemented in new API yet
-    // await api.deleteCommissionToken(token.officerId, token.id);
+    const success = await api.deleteCommissionToken(token.id);
+    if (!success) return showError('Could not delete token');
     await load();
   };
 

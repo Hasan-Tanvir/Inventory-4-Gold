@@ -81,10 +81,9 @@ const Dealers = () => {
     });
   };
 
-  const handleDisburseReward = async (dealerId: string, targetId: string, targetNumber: number, officerId?: string) => {
-    // Note: disburseTargetReward not implemented in new API yet
-    // const result = await api.disburseTargetReward(targetId, dealerId, targetNumber, officerId);
-    // if (!result.success) return showError(result.message || 'Reward not eligible');
+  const handleDisburseReward = async (dealerId: string, targetId: string, officerId?: string, officerName?: string) => {
+    const result = await api.disburseTargetReward(targetId, dealerId, officerId, officerName);
+    if (!result.success) return showError(result.message || 'Reward not eligible');
     setTargets(await api.getTargets());
     setPayments(await api.getPayments());
     showSuccess('Reward disbursed');
@@ -243,7 +242,7 @@ const Dealers = () => {
                                     <Button
                                       size="sm"
                                       className="h-6 px-2 text-xs bg-emerald-600 hover:bg-emerald-700"
-                                      onClick={() => handleDisburseReward(d.id, row.id, targetRows.findIndex(x => x.id === row.id) + 1, d.officerId)}
+                                      onClick={() => handleDisburseReward(d.id, row.id, d.officerId, d.officerName)}
                                     >
                                       Eligible x{row.eligibleCycles}
                                     </Button>
@@ -326,7 +325,7 @@ const Dealers = () => {
                                   <Button
                                     size="sm"
                                     className="h-6 px-2 text-[9px] bg-emerald-600 hover:bg-emerald-700"
-                                    onClick={() => handleDisburseReward(d.id, row.id, targetRows.findIndex(x => x.id === row.id) + 1, d.officerId)}
+                                    onClick={() => handleDisburseReward(d.id, row.id, d.officerId, d.officerName)}
                                   >
                                     Target Eligible x{row.eligibleCycles}
                                   </Button>
