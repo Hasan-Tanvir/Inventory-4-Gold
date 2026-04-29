@@ -414,7 +414,11 @@ export default function NewOrder() {
 
     if (ord.dealerId) {
       const dealer = dealers.find(d => d.id === ord.dealerId);
-      if (dealer) setSelectedDealer(dealer);
+      if (dealer) {
+        setSelectedDealer(dealer);
+      } else {
+        setDealerSearch(ord.customerName || '');
+      }
     } else {
       setCustomerName(ord.customerName || '');
       setCustomerPhone(ord.customerPhone || '');

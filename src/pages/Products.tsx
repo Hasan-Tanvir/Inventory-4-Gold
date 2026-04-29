@@ -355,6 +355,21 @@ const Products = () => {
     setHistoryDetailOpen(true);
   };
 
+  const deleteEntryGroup = async (entryGroupId: string) => {
+    if (!confirm('Delete this stock entry group?')) return;
+    const entriesToDelete = stockEntries.filter(e => (e.batchId || e.id) === entryGroupId);
+    for (const entry of entriesToDelete) {
+      const success = await api.deleteProductStockEntry(entry.id);
+      if (!success) {
+        showError('Failed to delete stock entry');
+        return;
+      }
+    }
+    setProducts(await api.getProducts());
+    setStockEntries(await api.getProductStockEntries());
+    showSuccess('Stock entry deleted');
+  };
+
   const openTransferDetail = (transfer: ProductStockTransfer) => {
     setHistoryDetail({
       type: 'transfer',
@@ -368,6 +383,18 @@ const Products = () => {
       ]
     });
     setHistoryDetailOpen(true);
+  };
+
+  const deleteTransfer = async (transferId: string) => {
+    if (!confirm('Delete this stock transfer?')) return;
+    const success = await api.deleteProductStockTransfer(transferId);
+    if (!success) {
+      showError('Failed to delete stock transfer');
+      return;
+    }
+    setProducts(await api.getProducts());
+    setStockTransfers(await api.getProductStockTransfers());
+    showSuccess('Stock transfer deleted');
   };
 
   return (
@@ -540,6 +567,7 @@ const Products = () => {
                             <TableHead className="text-right text-xs font-bold uppercase">Total Qty</TableHead>
                             <TableHead className="text-xs font-bold uppercase">Note</TableHead>
                             <TableHead className="text-right text-xs font-bold uppercase">View</TableHead>
+                            <TableHead className="text-right text-xs font-bold uppercase">Delete</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -557,6 +585,11 @@ const Products = () => {
                               <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEntryDetail(entry.id)}>
                                   <Eye className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => deleteEntryGroup(entry.id)}>
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>
@@ -586,6 +619,7 @@ const Products = () => {
                             <TableHead className="text-right text-xs font-bold uppercase">Qty</TableHead>
                             <TableHead className="text-xs font-bold uppercase">Note</TableHead>
                             <TableHead className="text-right text-xs font-bold uppercase">View</TableHead>
+                            <TableHead className="text-right text-xs font-bold uppercase">Delete</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -601,6 +635,11 @@ const Products = () => {
                               <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTransferDetail(transfer)}>
                                   <Eye className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400" onClick={() => deleteTransfer(transfer.id)}>
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>

@@ -323,10 +323,11 @@ const adjustProductStock = async (productId: string, location: 'dhaka' | 'chitta
 
 const getOrderInventoryMap = (items: OrderItem[], inventorySource: 'dhaka' | 'chittagong' | 'mixed'): Map<string, number> => {
   const map = new Map<string, number>();
+  const source = inventorySource || 'dhaka';
 
   items.forEach(item => {
     if (!item.productId) return;
-    const location = inventorySource === 'mixed' ? item.location : inventorySource;
+    const location = source === 'mixed' ? item.location : source;
     const key = `${item.productId}:${location}`;
     map.set(key, (map.get(key) || 0) + (item.quantity || 0));
   });
@@ -776,7 +777,7 @@ const getOrders = async (): Promise<Order[]> => {
     retailPaymentDate: order.retail_payment_date,
     paymentReference: order.payment_reference,
     includePriceIncreaseInCommission: order.include_price_increase_in_commission,
-    inventorySource: order.inventory_source,
+    inventorySource: order.inventory_source || 'dhaka',
     showSerialsOnInvoice: order.show_serials_on_invoice,
   }));
 };
@@ -894,6 +895,15 @@ const updateOrder = async (id: string, order: Partial<Order>): Promise<boolean> 
 };
 
 const deleteOrder = async (id: string): Promise<boolean> => {
+  const existingOrder = await getOrder(id);
+  if (existingOrder?.status === 'approved') {
+    const restored = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'rejected' });
+    if (!restored) {
+      console.error('Error restoring stock for approved order before delete');
+      return false;
+    }
+  }
+
   // Delete order items first
   await supabase
     .from('order_items')
@@ -967,42 +977,7 @@ const getOrder = async (id: string): Promise<Order | null> => {
     retailPaymentDate: data.retail_payment_date,
     paymentReference: data.payment_reference,
     includePriceIncreaseInCommission: data.include_price_increase_in_commission,
-    inventorySource: data.inventory_source,
-    showSerialsOnInvoice: data.show_serials_on_invoice,
-  };
-};
-
-const getConfig = async (): Promise<Customization | null> => {
-  return getCustomization();
-};
-
-const getNextOrderId = async (isQuote = false): Promise<string> => {
-  const config = await getCustomization();
-  const seed = isQuote ? config?.quoteSerialSeed : config?.orderSerialSeed;
-  if (!seed) {
-    const prefix = isQuote ? 'Q' : 'O';
-    return `${prefix}-${Date.now()}`;
-  }
-  
-  // Extract numeric suffix from seed (e.g., "R00001" -> 1)
-  const match = seed.match(/(\d+)$/);
-  const numericPart = match ? parseInt(match[1], 10) : 1;
-  const prefix = seed.substring(0, seed.length - match?.[1].length || 0);
-  const padLength = match?.[1].length || 5;
-  
-  // Get existing orders/quotes
-  const orders = await getOrders();
-  const relevantOrders = isQuote ? orders.filter(o => o.isQuote) : orders.filter(o => !o.isQuote);
-  
-  // Find the highest serial number
-  let maxNum = numericPart - 1;
-  relevantOrders.forEach(order => {
-    const orderMatch = order.id.match(/(\d+)$/);
-    if (orderMatch) {
-      const num = parseInt(orderMatch[1], 10);
-      if (num > maxNum) maxNum = num;
-    }
-  });
+    inventorySource: data.inventory_source || 'dhaka',
   
   const nextNum = maxNum + 1;
   const paddedNum = String(nextNum).padStart(padLength, '0');
@@ -1250,6 +1225,37 @@ const disburseTargetReward = async (
     return { success: false, message: insertError.message };
   }
 
+  const paymentRef = await getNextPaymentReference();
+  const { data: paymentData, error: paymentError } = await supabase
+    .from('payments')
+    .insert({
+      dealer_id: dealerId,
+      dealer_name: dealerName,
+      date: new Date().toISOString().split('T')[0],
+      type: 'Adjustment',
+      amount,
+      reference: paymentRef,
+      notes: `Target reward for ${target.name}`,
+      user_id: (await supabase.auth.getUser()).data.user?.id,
+    })
+    .select()
+    .single();
+
+  if (paymentError || !paymentData) {
+    console.error('Error inserting target reward payment:', paymentError);
+    return { success: false, message: paymentError?.message || 'Failed to create reward payment' };
+  }
+
+  const { error: updateRewardError } = await supabase
+    .from('target_rewards')
+    .update({ payment_id: paymentData.id })
+    .eq('id', inserted.id);
+
+  if (updateRewardError) {
+    console.error('Error updating target reward payment_id:', updateRewardError);
+    return { success: false, message: updateRewardError.message };
+  }
+
   const updatedRewardDisbursed = {
     ...(target.rewardDisbursed || {}),
     [dealerId]: disbursedCycles + eligibleCycles,
@@ -1367,7 +1373,7 @@ const syncRetailSalesFromApprovedOrders = async (): Promise<{ success: boolean; 
       amount: order.net_total,
       payment_status: order.retail_payment_status,
       paid_amount: order.partial_amount,
-      location: order.inventory_source,
+      location: order.inventory_source === 'mixed' ? 'dhaka' : (order.inventory_source || 'dhaka'),
       type: 'sale',
       user_id: order.created_by,
     };
@@ -2141,6 +2147,23 @@ const updateProductStockEntry = async (id: string, entry: Partial<ProductStockEn
 };
 
 const deleteProductStockEntry = async (id: string): Promise<boolean> => {
+  const { data: existing, error: existingError } = await supabase
+    .from('product_stock_entries')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (existingError || !existing) {
+    console.error('Error fetching product stock entry to delete:', existingError);
+    return false;
+  }
+
+  const adjusted = await adjustProductStock(existing.product_id, existing.location, -existing.quantity);
+  if (!adjusted) {
+    console.error('Error reversing product stock for deleted stock entry');
+    return false;
+  }
+
   const { error } = await supabase
     .from('product_stock_entries')
     .delete()
@@ -2148,6 +2171,7 @@ const deleteProductStockEntry = async (id: string): Promise<boolean> => {
 
   if (error) {
     console.error('Error deleting product stock entry:', error);
+    await adjustProductStock(existing.product_id, existing.location, existing.quantity);
     return false;
   }
 
