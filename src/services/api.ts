@@ -993,10 +993,8 @@ const getOrder = async (id: string): Promise<Order | null> => {
     paymentReference: data.payment_reference,
     includePriceIncreaseInCommission: data.include_price_increase_in_commission,
     inventorySource: data.inventory_source || 'dhaka',
-  
-  const nextNum = maxNum + 1;
-  const paddedNum = String(nextNum).padStart(padLength, '0');
-  return `${prefix}${paddedNum}`;
+    showSerialsOnInvoice: data.show_serials_on_invoice,
+  };
 };
 
 const getNextPaymentId = async (): Promise<string> => {
