@@ -77,7 +77,7 @@ const Invoices = () => {
                   <SelectValue placeholder="Choose a document to view..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {visibleOrders.slice().reverse().map(o => (
+                  {visibleOrders.map(o => (
                     <SelectItem key={o.id} value={o.id}>
                       <span className={isDocumentQuote(o) ? "text-orange-600 font-bold" : "text-blue-600 font-bold"}>
                         {isDocumentQuote(o) ? '[QUOTE]' : '[INV]'}

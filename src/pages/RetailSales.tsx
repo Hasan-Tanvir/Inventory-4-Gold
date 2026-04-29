@@ -49,7 +49,7 @@ const RetailSales = () => {
   };
 
   const filteredTransactions = useMemo(() => 
-    transactions.filter(t => t.location === location).reverse(), 
+    transactions.filter(t => t.location === location), 
   [transactions, location]);
 
   const initialByLocation = useMemo(() => {

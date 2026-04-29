@@ -59,7 +59,7 @@ const Orders = () => {
   const filtered = orders.filter(o => 
     o.customerName.toLowerCase().includes(search.toLowerCase()) || 
     o.id.toLowerCase().includes(search.toLowerCase())
-  ).reverse();
+  );
 
   return (
     <Layout>

@@ -130,8 +130,6 @@ export function generateInvoiceHtml(order: Order, isQuoteDoc: boolean, settings:
 
   <div style="font-size:12px;margin-top:8px;">
     <div style="margin-bottom:8px;">${regards}</div>
-    ${showExecName ? `<div style="margin-top:36px;"><strong>${settings.execName}</strong></div>` : ''}
-    ${showExecDetails ? `<div style="font-size:11px;">${settings.execDetails}</div>` : ''}
     ${(customDetailHtml || customDetailText) ? `
       <div style="margin-top:12px; ${settings.customDetailBoxed === false ? '' : 'border:1px solid #777;padding:8px;'} ${customStyle}">
         ${customDetailHtml || customDetailText}

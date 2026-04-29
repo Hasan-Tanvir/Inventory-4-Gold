@@ -585,7 +585,7 @@ const Products = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {stockTransfers.slice().reverse().slice(0, 25).map((transfer) => (
+                          {stockTransfers.slice(0, 25).map((transfer) => (
                             <TableRow key={transfer.id}>
                               <TableCell className="text-xs text-slate-500">{formatDisplayDate(transfer.date)}</TableCell>
                               <TableCell className="text-xs font-semibold">{transfer.transferId || transfer.id}</TableCell>

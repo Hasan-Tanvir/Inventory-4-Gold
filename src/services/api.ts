@@ -792,9 +792,34 @@ const getConfig = async (): Promise<Customization | null> => {
 const getNextOrderId = async (isQuote = false): Promise<string> => {
   const config = await getCustomization();
   const seed = isQuote ? config?.quoteSerialSeed : config?.orderSerialSeed;
-  const prefix = isQuote ? 'Q' : 'O';
-  if (!seed) return `${prefix}-${Date.now()}`;
-  return `${seed}-${Date.now()}`;
+  if (!seed) {
+    const prefix = isQuote ? 'Q' : 'O';
+    return `${prefix}-${Date.now()}`;
+  }
+  
+  // Extract numeric suffix from seed (e.g., "R00001" -> 1)
+  const match = seed.match(/(\d+)$/);
+  const numericPart = match ? parseInt(match[1], 10) : 1;
+  const prefix = seed.substring(0, seed.length - match?.[1].length || 0);
+  const padLength = match?.[1].length || 5;
+  
+  // Get existing orders/quotes
+  const orders = await getOrders();
+  const relevantOrders = isQuote ? orders.filter(o => o.isQuote) : orders.filter(o => !o.isQuote);
+  
+  // Find the highest serial number
+  let maxNum = numericPart - 1;
+  relevantOrders.forEach(order => {
+    const orderMatch = order.id.match(/(\d+)$/);
+    if (orderMatch) {
+      const num = parseInt(orderMatch[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  
+  const nextNum = maxNum + 1;
+  const paddedNum = String(nextNum).padStart(padLength, '0');
+  return `${prefix}${paddedNum}`;
 };
 
 const getNextPaymentId = async (): Promise<string> => {
@@ -804,7 +829,27 @@ const getNextPaymentId = async (): Promise<string> => {
 const getNextPaymentReference = async (): Promise<string> => {
   const config = await getCustomization();
   if (!config?.paymentReferenceSeed) return `REF-${Date.now()}`;
-  return `${config.paymentReferenceSeed}-${Date.now()}`;
+  
+  const seed = config.paymentReferenceSeed;
+  const match = seed.match(/(\d+)$/);
+  const numericPart = match ? parseInt(match[1], 10) : 1;
+  const prefix = seed.substring(0, seed.length - match?.[1].length || 0);
+  const padLength = match?.[1].length || 5;
+  
+  // Get existing payments
+  const payments = await getPayments();
+  let maxNum = numericPart - 1;
+  payments.forEach(payment => {
+    const payMatch = payment.reference?.match(/(\d+)$/);
+    if (payMatch) {
+      const num = parseInt(payMatch[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  
+  const nextNum = maxNum + 1;
+  const paddedNum = String(nextNum).padStart(padLength, '0');
+  return `${prefix}${paddedNum}`;
 };
 
 const getAllSerials = async (): Promise<string[]> => {
@@ -1903,7 +1948,7 @@ const saveCustomization = async (customization: Customization): Promise<boolean>
       quote_serial_seed: customization.quoteSerialSeed,
       payment_reference_seed: customization.paymentReferenceSeed,
       user_id: user.id,
-    });
+    }, { onConflict: 'user_id' });
 
   if (error) {
     console.error('Error saving customization:', error);

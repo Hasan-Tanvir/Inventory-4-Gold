@@ -247,7 +247,7 @@ const Payments = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.slice().reverse().map((p) => (
+                  {payments.map((p) => (
                     <TableRow key={p.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-bold text-slate-900 py-2.5 whitespace-nowrap">{p.id}</TableCell>
                       <TableCell className="text-xs text-slate-500 whitespace-nowrap">{p.date}</TableCell>

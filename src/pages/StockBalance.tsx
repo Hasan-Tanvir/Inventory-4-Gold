@@ -264,7 +264,7 @@ const StockBalance = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sendAmounts.slice().reverse().slice(0, 25).map((s) => (
+                {sendAmounts.slice(0, 25).map((s) => (
                   <TableRow key={s.id} className="hover:bg-slate-50/50 transition-colors">
                     <TableCell className="text-[10px] text-slate-500">{s.date}</TableCell>
                     <TableCell className="capitalize text-[10px] font-bold">{s.location.charAt(0)}</TableCell>
