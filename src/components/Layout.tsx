@@ -180,7 +180,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           
           <div className="flex items-center gap-4">
             <p className="text-[11px] sm:text-xs font-bold text-slate-600">
-              Hello, {user.name}
+              Hello, {user.officerId || user.name}
             </p>            <Button variant="ghost" size="icon" onClick={async () => { await api.signOut(); navigate('/login'); }} className="h-10 w-10 rounded-xl hover:bg-slate-50 lg:hidden">
               <LogOut className="w-5 h-5 text-slate-400" />
             </Button>            <Popover onOpenChange={async (open) => {

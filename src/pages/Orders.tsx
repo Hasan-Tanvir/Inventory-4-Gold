@@ -38,7 +38,7 @@ const Orders = () => {
   const handleApprove = async (id: string) => {
     if (!user) return;
     // Optimistic UI: update local state immediately
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'approved' as const, approvedBy: user.id } : o));
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'approved' as const, approvedBy: user.id, approvedByLabel: user.officerId || user.id } : o));
     const approved = await api.approveOrder(id, user.id);
     if (!approved) {
       // Revert on failure
@@ -127,8 +127,8 @@ const Orders = () => {
                     <TableCell>
                       <div className="font-bold text-slate-800">{o.customerName}</div>
                       <div className="text-[10px] text-slate-400 uppercase font-bold">{formatDisplayDate(o.date)}</div>
-                      <div className="text-[10px] text-slate-400">Placer: {o.createdBy || '-'}</div>
-                      <div className="text-[10px] text-slate-400">Approver: {o.approvedBy || '-'}</div>
+                      <div className="text-[10px] text-slate-400">Placer: {o.createdByLabel || o.createdBy || '-'}</div>
+                      <div className="text-[10px] text-slate-400">Approver: {o.approvedByLabel || o.approvedBy || '-'}</div>
                       {o.notes && <div className="text-[10px] text-slate-500 italic">Note: {o.notes}</div>}
                     </TableCell>
                     <TableCell>

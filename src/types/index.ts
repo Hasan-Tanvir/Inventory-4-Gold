@@ -104,6 +104,8 @@ export interface Order {
   notes: string;
   createdBy: string;
   approvedBy?: string;
+  createdByLabel?: string;
+  approvedByLabel?: string;
   isQuote: boolean;
   retailPaymentStatus?: 'paid' | 'unpaid' | 'partial';
   partialAmount?: number;

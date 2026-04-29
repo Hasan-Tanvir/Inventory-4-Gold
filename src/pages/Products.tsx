@@ -61,6 +61,8 @@ const Products = () => {
     title: string;
     rows: Array<{ label: string; value: string }>;
   } | null>(null);
+  const [editingStockEntryGroup, setEditingStockEntryGroup] = useState<ProductStockEntry[] | null>(null);
+  const [editingStockTransfer, setEditingStockTransfer] = useState<ProductStockTransfer | null>(null);
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<'tile' | 'list'>('tile');
 
@@ -104,37 +106,6 @@ const Products = () => {
         savedProduct = editingProduct as Product;
       }
 
-      if (isNewProduct) {
-        const initialEntries: ProductStockEntry[] = [];
-        if (initialDhaka > 0) {
-          initialEntries.push({
-            id: '',
-            batchId: `INIT-${savedProduct.id}`,
-            productId: savedProduct.id,
-            productName: savedProduct.name,
-            date: getTodayISO(),
-            location: 'dhaka',
-            quantity: initialDhaka,
-            note: 'Initial Quantity'
-          });
-        }
-        if (initialCtg > 0) {
-          initialEntries.push({
-            id: '',
-            batchId: `INIT-${savedProduct.id}`,
-            productId: savedProduct.id,
-            productName: savedProduct.name,
-            date: getTodayISO(),
-            location: 'chittagong',
-            quantity: initialCtg,
-            note: 'Initial Quantity'
-          });
-        }
-        if (initialEntries.length > 0) {
-          // Initial stock is already saved in the product row, so only write history.
-          await api.saveProductStockEntries(initialEntries, { applyToInventory: false });
-        }
-      }
       setProducts(await api.getProducts());
       setStockEntries(await api.getProductStockEntries());
       setEditingProduct(null);
@@ -182,12 +153,10 @@ const Products = () => {
     const validItems = stockEntryItems.filter(i => i.productId && Number(i.quantity) > 0);
     if (validItems.length === 0) return;
 
-    const batchId = `SE-${Date.now()}`;
     const payload: ProductStockEntry[] = validItems.map((item) => {
       const product = products.find(p => p.id === item.productId);
       return {
         id: '',
-        batchId,
         productId: item.productId,
         productName: product?.name || 'Unknown Product',
         date: stockEntryDate,
@@ -259,8 +228,8 @@ const Products = () => {
     if (from === -1 || to === -1) return;
     const [moved] = current.splice(from, 1);
     current.splice(to, 0, moved);
+    setProducts(current);
     await api.reorderProducts(current.map(p => p.id));
-    setProducts(await api.getProducts());
     setDraggedProductId(null);
   };
 
@@ -395,6 +364,56 @@ const Products = () => {
     setProducts(await api.getProducts());
     setStockTransfers(await api.getProductStockTransfers());
     showSuccess('Stock transfer deleted');
+  };
+
+  const editEntryGroup = (entryGroupId: string) => {
+    const groupEntries = stockEntries.filter(e => (e.batchId || e.id) === entryGroupId);
+    if (!groupEntries.length) return;
+    setEditingStockEntryGroup(groupEntries.map(entry => ({ ...entry })));
+  };
+
+  const updateEditingStockEntry = (index: number, field: keyof ProductStockEntry, value: string | number) => {
+    if (!editingStockEntryGroup) return;
+    const updated = [...editingStockEntryGroup];
+    updated[index] = { ...updated[index], [field]: value } as ProductStockEntry;
+    setEditingStockEntryGroup(updated);
+  };
+
+  const saveEditedStockEntryGroup = async () => {
+    if (!editingStockEntryGroup) return;
+    for (const entry of editingStockEntryGroup) {
+      const success = await api.updateProductStockEntry(entry.id, entry);
+      if (!success) {
+        showError('Failed to update stock entry');
+        return;
+      }
+    }
+    setProducts(await api.getProducts());
+    setStockEntries(await api.getProductStockEntries());
+    setEditingStockEntryGroup(null);
+    showSuccess('Stock entry updated');
+  };
+
+  const editTransfer = (transfer: ProductStockTransfer) => {
+    setEditingStockTransfer({ ...transfer });
+  };
+
+  const updateEditingStockTransfer = (field: keyof ProductStockTransfer, value: string | number) => {
+    if (!editingStockTransfer) return;
+    setEditingStockTransfer({ ...editingStockTransfer, [field]: value } as ProductStockTransfer);
+  };
+
+  const saveEditedStockTransfer = async () => {
+    if (!editingStockTransfer) return;
+    const success = await api.updateProductStockTransfer(editingStockTransfer.id, editingStockTransfer);
+    if (!success) {
+      showError('Failed to update stock transfer');
+      return;
+    }
+    setProducts(await api.getProducts());
+    setStockTransfers(await api.getProductStockTransfers());
+    setEditingStockTransfer(null);
+    showSuccess('Stock transfer updated');
   };
 
   return (
@@ -567,6 +586,7 @@ const Products = () => {
                             <TableHead className="text-right text-xs font-bold uppercase">Total Qty</TableHead>
                             <TableHead className="text-xs font-bold uppercase">Note</TableHead>
                             <TableHead className="text-right text-xs font-bold uppercase">View</TableHead>
+                            <TableHead className="text-right text-xs font-bold uppercase">Edit</TableHead>
                             <TableHead className="text-right text-xs font-bold uppercase">Delete</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -585,6 +605,11 @@ const Products = () => {
                               <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEntryDetail(entry.id)}>
                                   <Eye className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editEntryGroup(entry.id)}>
+                                  <Edit className="w-4 h-4" />
                                 </Button>
                               </TableCell>
                               <TableCell className="text-right">
@@ -619,6 +644,7 @@ const Products = () => {
                             <TableHead className="text-right text-xs font-bold uppercase">Qty</TableHead>
                             <TableHead className="text-xs font-bold uppercase">Note</TableHead>
                             <TableHead className="text-right text-xs font-bold uppercase">View</TableHead>
+                            <TableHead className="text-right text-xs font-bold uppercase">Edit</TableHead>
                             <TableHead className="text-right text-xs font-bold uppercase">Delete</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -635,6 +661,11 @@ const Products = () => {
                               <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTransferDetail(transfer)}>
                                   <Eye className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editTransfer(transfer)}>
+                                  <Edit className="w-4 h-4" />
                                 </Button>
                               </TableCell>
                               <TableCell className="text-right">
@@ -870,6 +901,100 @@ const Products = () => {
                 </p>
               )}
               <Button className="w-full bg-slate-900" onClick={handleSaveStockTransfer}>Transfer Stock</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!editingStockEntryGroup} onOpenChange={(open) => !open && setEditingStockEntryGroup(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Update Stock Entry</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {editingStockEntryGroup?.map((entry, index) => (
+                <div key={entry.id} className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <Label>Product</Label>
+                    <Input value={entry.productName} readOnly />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Location</Label>
+                    <Select value={entry.location} onValueChange={(value) => updateEditingStockEntry(index, 'location', value as 'dhaka' | 'chittagong')}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dhaka">Dhaka</SelectItem>
+                        <SelectItem value="chittagong">CTG</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Quantity</Label>
+                    <Input type="number" value={entry.quantity} onChange={(e) => updateEditingStockEntry(index, 'quantity', Number(e.target.value))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Note</Label>
+                    <Input value={entry.note || ''} onChange={(e) => updateEditingStockEntry(index, 'note', e.target.value)} />
+                  </div>
+                </div>
+              ))}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditingStockEntryGroup(null)}>Cancel</Button>
+                <Button className="bg-slate-900" onClick={saveEditedStockEntryGroup}>Save Changes</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!editingStockTransfer} onOpenChange={(open) => !open && setEditingStockTransfer(null)}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Edit Stock Transfer</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Product</Label>
+                <Input value={editingStockTransfer?.productName || ''} readOnly />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>From</Label>
+                  <Select value={editingStockTransfer?.from} onValueChange={(value) => updateEditingStockTransfer('from', value as 'dhaka' | 'chittagong')}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dhaka">Dhaka</SelectItem>
+                      <SelectItem value="chittagong">CTG</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>To</Label>
+                  <Select value={editingStockTransfer?.to} onValueChange={(value) => updateEditingStockTransfer('to', value as 'dhaka' | 'chittagong')}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dhaka">Dhaka</SelectItem>
+                      <SelectItem value="chittagong">CTG</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input type="date" value={editingStockTransfer?.date || ''} onChange={(e) => updateEditingStockTransfer('date', e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Quantity</Label>
+                  <Input type="number" value={editingStockTransfer?.quantity || 0} onChange={(e) => updateEditingStockTransfer('quantity', Number(e.target.value))} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Note</Label>
+                <Input value={editingStockTransfer?.note || ''} onChange={(e) => updateEditingStockTransfer('note', e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditingStockTransfer(null)}>Cancel</Button>
+                <Button className="bg-slate-900" onClick={saveEditedStockTransfer}>Save Changes</Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

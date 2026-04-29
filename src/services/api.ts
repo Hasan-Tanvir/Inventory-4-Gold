@@ -742,6 +742,19 @@ const getOrders = async (): Promise<Order[]> => {
     return [];
   }
 
+  const userIds = Array.from(new Set<any>(data.flatMap((order: any) => [order.created_by, order.approved_by].filter(Boolean))));
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, officer_id')
+    .in('id', userIds);
+
+  const officerMap = new Map<string, string>();
+  (profiles || []).forEach((profile: any) => {
+    if (profile.id && profile.officer_id) {
+      officerMap.set(profile.id, profile.officer_id);
+    }
+  });
+
   return data.map(order => ({
     id: order.id,
     date: order.date,
@@ -770,7 +783,9 @@ const getOrders = async (): Promise<Order[]> => {
     netTotal: order.net_total,
     notes: order.notes,
     createdBy: order.created_by,
+    createdByLabel: officerMap.get(order.created_by) || order.created_by,
     approvedBy: order.approved_by,
+    approvedByLabel: order.approved_by ? (officerMap.get(order.approved_by) || order.approved_by) : undefined,
     isQuote: order.is_quote,
     retailPaymentStatus: order.retail_payment_status,
     partialAmount: order.partial_amount,
@@ -1012,6 +1027,41 @@ const getNextPaymentReference = async (): Promise<string> => {
   const nextNum = maxNum + 1;
   const paddedNum = String(nextNum).padStart(padLength, '0');
   return `${prefix}${paddedNum}`;
+};
+
+const getNextSequentialId = async (table: string, column: string, prefix: string, padLength = 5): Promise<string> => {
+  const { data, error } = await supabase
+    .from(table)
+    .select(column);
+
+  if (error || !data) {
+    console.error('Error fetching sequential ids:', error);
+    return `${prefix}${String(1).padStart(padLength, '0')}`;
+  }
+
+  let maxNum = 0;
+  data.forEach((row: any) => {
+    const value = row[column];
+    if (typeof value !== 'string') return;
+    const match = value.match(new RegExp(`^${prefix}(\\d+)$`));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!Number.isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  });
+
+  const nextNum = maxNum + 1;
+  return `${prefix}${String(nextNum).padStart(padLength, '0')}`;
+};
+
+const getNextStockEntryId = async (): Promise<string> => {
+  return await getNextSequentialId('product_stock_entries', 'entry_id', 'E', 5);
+};
+
+const getNextStockTransferId = async (): Promise<string> => {
+  return await getNextSequentialId('product_stock_transfers', 'transfer_id', 'T', 5);
 };
 
 const getAllSerials = async (): Promise<string[]> => {
@@ -1495,17 +1545,22 @@ const saveProductStockEntries = async (
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const payload = entries.map(entry => ({
-    entry_id: entry.entryId,
-    batch_id: entry.batchId,
-    product_id: entry.productId,
-    product_name: entry.productName,
-    date: entry.date,
-    location: entry.location,
-    quantity: entry.quantity,
-    note: entry.note,
-    user_id: user.id,
-  }));
+  const groupEntryId = entries[0]?.entryId || entries[0]?.batchId || await getNextStockEntryId();
+  const payload = entries.map(entry => {
+    const entryId = entry.entryId || entry.batchId || groupEntryId;
+    const batchId = entry.batchId || entryId;
+    return {
+      entry_id: entryId,
+      batch_id: batchId,
+      product_id: entry.productId,
+      product_name: entry.productName,
+      date: entry.date,
+      location: entry.location,
+      quantity: entry.quantity,
+      note: entry.note,
+      user_id: user.id,
+    };
+  });
 
   const { data, error } = await supabase
     .from('product_stock_entries')
@@ -2077,11 +2132,14 @@ const saveProductStockEntry = async (entry: Omit<ProductStockEntry, 'id'>): Prom
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const entryId = entry.entryId || await getNextStockEntryId();
+  const batchId = entry.batchId || entryId;
+
   const { data, error } = await supabase
     .from('product_stock_entries')
     .insert({
-      entry_id: entry.entryId,
-      batch_id: entry.batchId,
+      entry_id: entryId,
+      batch_id: batchId,
       product_id: entry.productId,
       product_name: entry.productName,
       date: entry.date,
@@ -2093,21 +2151,15 @@ const saveProductStockEntry = async (entry: Omit<ProductStockEntry, 'id'>): Prom
     .select()
     .single();
 
-  if (error) {
+  if (error || !data) {
     console.error('Error saving product stock entry:', error);
     return null;
   }
 
-  // Update product inventory
-  const product = await getProduct(entry.productId);
-  if (product) {
-    const updatedProduct = { ...product };
-    if (entry.location === 'dhaka') {
-      updatedProduct.dhaka += entry.quantity;
-    } else if (entry.location === 'chittagong') {
-      updatedProduct.chittagong += entry.quantity;
-    }
-    await saveProduct(updatedProduct);
+  const adjusted = await adjustProductStock(entry.productId, entry.location, entry.quantity);
+  if (!adjusted) {
+    await supabase.from('product_stock_entries').delete().eq('id', data.id);
+    return null;
   }
 
   return {
@@ -2124,6 +2176,36 @@ const saveProductStockEntry = async (entry: Omit<ProductStockEntry, 'id'>): Prom
 };
 
 const updateProductStockEntry = async (id: string, entry: Partial<ProductStockEntry>): Promise<boolean> => {
+  const { data: existing, error: existingError } = await supabase
+    .from('product_stock_entries')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (existingError || !existing) {
+    console.error('Error fetching existing product stock entry:', existingError);
+    return false;
+  }
+
+  const oldProductId = existing.product_id;
+  const oldLocation = existing.location as 'dhaka' | 'chittagong';
+  const oldQuantity = existing.quantity;
+
+  const newProductId = entry.productId || oldProductId;
+  const newLocation = entry.location || oldLocation;
+  const newQuantity = typeof entry.quantity === 'number' ? entry.quantity : oldQuantity;
+
+  if (oldProductId !== newProductId || oldLocation !== newLocation || oldQuantity !== newQuantity) {
+    const restored = await adjustProductStock(oldProductId, oldLocation, oldQuantity);
+    if (!restored) return false;
+
+    const adjusted = await adjustProductStock(newProductId, newLocation, -newQuantity);
+    if (!adjusted) {
+      await adjustProductStock(oldProductId, oldLocation, -oldQuantity);
+      return false;
+    }
+  }
+
   const { error } = await supabase
     .from('product_stock_entries')
     .update({
@@ -2140,6 +2222,10 @@ const updateProductStockEntry = async (id: string, entry: Partial<ProductStockEn
 
   if (error) {
     console.error('Error updating product stock entry:', error);
+    if (oldProductId !== newProductId || oldLocation !== newLocation || oldQuantity !== newQuantity) {
+      await adjustProductStock(newProductId, newLocation, newQuantity);
+      await adjustProductStock(oldProductId, oldLocation, -oldQuantity);
+    }
     return false;
   }
 
@@ -2211,10 +2297,11 @@ const saveProductStockTransfer = async (transfer: Omit<ProductStockTransfer, 'id
     return { success: false, message: 'Source and destination must be different' };
   }
 
+  const transferId = transfer.transferId || await getNextStockTransferId();
   const { data, error } = await supabase
     .from('product_stock_transfers')
     .insert({
-      transfer_id: transfer.transferId,
+      transfer_id: transferId,
       date: transfer.date,
       product_id: transfer.productId,
       product_name: transfer.productName,
