@@ -3,6 +3,8 @@ import {
   Customization, Category, Officer, Payment, RetailTransaction,
   SendAmountEntry, CommissionClearance, ProductStockEntry, ProductStockTransfer, TargetReward
 } from '../types';
+
+// Force redeploy
 import { supabase } from '@/lib/supabase';
 
 const getCurrentUser = async (): Promise<User | null> => {
