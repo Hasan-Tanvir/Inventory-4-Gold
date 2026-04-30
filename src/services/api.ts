@@ -449,9 +449,11 @@ const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null
   }
 
   // Create initial stock entries
+  const initialEntryId = (initialDhaka > 0 || initialChittagong > 0) ? await getNextStockEntryId() : undefined;
   if (initialDhaka > 0) {
     await saveProductStockEntry({
-      entryId: `INIT-${data.id}-DHK`,
+      entryId: initialEntryId,
+      batchId: initialEntryId,
       productId: data.id,
       productName: data.name,
       date: new Date().toISOString().split('T')[0],
@@ -462,7 +464,8 @@ const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null
   }
   if (initialChittagong > 0) {
     await saveProductStockEntry({
-      entryId: `INIT-${data.id}-CTG`,
+      entryId: initialEntryId,
+      batchId: initialEntryId,
       productId: data.id,
       productName: data.name,
       date: new Date().toISOString().split('T')[0],
@@ -745,13 +748,13 @@ const getOrders = async (): Promise<Order[]> => {
   const userIds = Array.from(new Set<any>(data.flatMap((order: any) => [order.created_by, order.approved_by].filter(Boolean))));
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, officer_id')
+    .select('id, officer_id, name')
     .in('id', userIds);
 
-  const officerMap = new Map<string, string>();
+  const userLabelMap = new Map<string, string>();
   (profiles || []).forEach((profile: any) => {
-    if (profile.id && profile.officer_id) {
-      officerMap.set(profile.id, profile.officer_id);
+    if (profile.id) {
+      userLabelMap.set(profile.id, profile.officer_id || profile.name || profile.id);
     }
   });
 
@@ -783,9 +786,9 @@ const getOrders = async (): Promise<Order[]> => {
     netTotal: order.net_total,
     notes: order.notes,
     createdBy: order.created_by,
-    createdByLabel: officerMap.get(order.created_by) || order.created_by,
+    createdByLabel: userLabelMap.get(order.created_by) || order.created_by,
     approvedBy: order.approved_by,
-    approvedByLabel: order.approved_by ? (officerMap.get(order.approved_by) || order.approved_by) : undefined,
+    approvedByLabel: order.approved_by ? (userLabelMap.get(order.approved_by) || order.approved_by) : undefined,
     isQuote: order.is_quote,
     retailPaymentStatus: order.retail_payment_status,
     partialAmount: order.partial_amount,
@@ -957,6 +960,19 @@ const getOrder = async (id: string): Promise<Order | null> => {
     return null;
   }
 
+  const userIds = [data.created_by, data.approved_by].filter(Boolean);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, officer_id, name')
+    .in('id', userIds);
+
+  const userLabelMap = new Map<string, string>();
+  (profiles || []).forEach((profile: any) => {
+    if (profile.id) {
+      userLabelMap.set(profile.id, profile.officer_id || profile.name || profile.id);
+    }
+  });
+
   return {
     id: data.id,
     date: data.date,
@@ -985,7 +1001,9 @@ const getOrder = async (id: string): Promise<Order | null> => {
     netTotal: data.net_total,
     notes: data.notes,
     createdBy: data.created_by,
+    createdByLabel: userLabelMap.get(data.created_by) || data.created_by,
     approvedBy: data.approved_by,
+    approvedByLabel: data.approved_by ? (userLabelMap.get(data.approved_by) || data.approved_by) : undefined,
     isQuote: data.is_quote,
     retailPaymentStatus: data.retail_payment_status,
     partialAmount: data.partial_amount,

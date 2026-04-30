@@ -246,7 +246,7 @@ const Products = () => {
     }>();
 
     stockEntries.forEach((entry) => {
-      const key = entry.batchId || entry.id;
+      const key = entry.entryId || entry.batchId || entry.id;
       const current = groups.get(key);
       const locationLabel = entry.location === 'dhaka' ? 'Dhaka' : 'CTG';
       if (!current) {
@@ -326,7 +326,7 @@ const Products = () => {
 
   const deleteEntryGroup = async (entryGroupId: string) => {
     if (!confirm('Delete this stock entry group?')) return;
-    const entriesToDelete = stockEntries.filter(e => (e.batchId || e.id) === entryGroupId);
+    const entriesToDelete = stockEntries.filter(e => (e.entryId || e.batchId || e.id) === entryGroupId);
     for (const entry of entriesToDelete) {
       const success = await api.deleteProductStockEntry(entry.id);
       if (!success) {

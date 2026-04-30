@@ -344,17 +344,26 @@ export default function NewOrder() {
   );
 
   const loadData = async () => {
-    setDealers(await api.getDealers());
-    setProducts(await api.getProducts());
-    setOrders(await api.getOrders());
-    setOfficers(await api.getOfficers());
-    setSettings(await api.getCustomization());
-    setCurrentUser(await api.getCurrentUser());
+    const dealersList = await api.getDealers();
+    const productsList = await api.getProducts();
+    const ordersList = await api.getOrders();
+    const officersList = await api.getOfficers();
+    const settingsData = await api.getCustomization();
+    const currentUserData = await api.getCurrentUser();
+
+    setDealers(dealersList);
+    setProducts(productsList);
+    setOrders(ordersList);
+    setOfficers(officersList);
+    setSettings(settingsData);
+    setCurrentUser(currentUserData);
+
+    return { dealersList, productsList, ordersList, officersList, settingsData, currentUserData };
   };
 
   useEffect(() => {
     const loadAndInitialize = async () => {
-      await loadData();
+      const { dealersList } = await loadData();
       const params = new URLSearchParams(window.location.search);
       const editId = routeOrderId || params.get('edit');
       const draftKey = editId ? `inventory4-new-order-draft-${editId}` : 'inventory4-new-order-draft';
@@ -369,7 +378,7 @@ export default function NewOrder() {
         setOrderType(draft.orderType || 'dealer');
         setInventorySource(draft.inventorySource || 'chittagong');
         setDealerSearch(draft.dealerSearch || '');
-        setSelectedDealer(draft.selectedDealerId ? dealers.find(d => d.id === draft.selectedDealerId) || null : null);
+        setSelectedDealer(draft.selectedDealerId ? dealersList.find(d => d.id === draft.selectedDealerId) || null : null);
         setCustomerName(draft.customerName || '');
         setCustomerPhone(draft.customerPhone || '');
         setCustomerAddress(draft.customerAddress || '');
@@ -388,14 +397,14 @@ export default function NewOrder() {
       if (editId) {
         const existingOrder = await api.getOrder(editId);
         if (existingOrder) {
-          loadOrderIntoForm(existingOrder);
+          loadOrderIntoForm(existingOrder, dealersList);
         }
       }
     };
     loadAndInitialize();
   }, [routeOrderId]);
 
-  const loadOrderIntoForm = (ord: Order) => {
+  const loadOrderIntoForm = (ord: Order, availableDealers: Dealer[]) => {
     setEditOrderId(ord.id);
     setOriginalOrderStatus(ord.status || 'pending');
     setOriginalApprovedBy(ord.approvedBy || undefined);
@@ -413,7 +422,7 @@ export default function NewOrder() {
     setPartialAmount(ord.partialAmount || 0);
 
     if (ord.dealerId) {
-      const dealer = dealers.find(d => d.id === ord.dealerId);
+      const dealer = availableDealers.find(d => d.id === ord.dealerId);
       if (dealer) {
         setSelectedDealer(dealer);
       } else {
