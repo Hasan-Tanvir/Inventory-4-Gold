@@ -27,7 +27,8 @@ const getCurrentUser = async (): Promise<User | null> => {
     notificationsEnabled: profile.notifications_enabled,
     allowedTabs: profile.allowed_tabs || [],
     mobileQuickTabs: profile.mobile_quick_tabs || [],
-    officerId: profile.officer_id
+    officerId: profile.officer_id,
+    displayNamePreference: profile.display_name_preference || 'officerId'
   };
 };
 
@@ -90,7 +91,8 @@ const getUsers = async (): Promise<User[]> => {
     notificationsEnabled: profile.notifications_enabled,
     allowedTabs: profile.allowed_tabs || [],
     mobileQuickTabs: profile.mobile_quick_tabs || [],
-    officerId: profile.officer_id
+    officerId: profile.officer_id,
+    displayNamePreference: profile.display_name_preference || 'officerId'
   }));
 };
 
@@ -100,7 +102,7 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
     const authUser = await signUp(user.id, user.password, user.name);
     if (!authUser) return null;
     // Now update the profile with additional fields
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .update({
         role: user.role,
@@ -108,24 +110,28 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
         notifications_enabled: user.notificationsEnabled,
         allowed_tabs: user.allowedTabs,
         mobile_quick_tabs: user.mobileQuickTabs,
-        officer_id: user.officerId
+        officer_id: user.officerId,
+        display_name_preference: user.displayNamePreference || 'officerId'
       })
-      .eq('id', authUser.id);
+      .eq('id', authUser.id)
+      .select()
+      .single();
 
-    if (error) {
-      console.error('Error updating profile after signup:', error);
+    if (error || !data) {
+      console.error('Error creating user profile:', error);
       return null;
     }
 
     return {
-      id: authUser.id,
-      name: authUser.name,
-      role: user.role,
-      photo: user.photo,
-      notificationsEnabled: user.notificationsEnabled,
-      allowedTabs: user.allowedTabs || [],
-      mobileQuickTabs: user.mobileQuickTabs || [],
-      officerId: user.officerId
+      id: data.id,
+      name: data.name,
+      role: data.role,
+      photo: data.photo,
+      notificationsEnabled: data.notifications_enabled,
+      allowedTabs: data.allowed_tabs || [],
+      mobileQuickTabs: data.mobile_quick_tabs || [],
+      officerId: data.officer_id,
+      displayNamePreference: data.display_name_preference || 'officerId'
     };
   } else {
     // Update existing user
@@ -138,13 +144,14 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
         notifications_enabled: user.notificationsEnabled,
         allowed_tabs: user.allowedTabs,
         mobile_quick_tabs: user.mobileQuickTabs,
-        officer_id: user.officerId
+        officer_id: user.officerId,
+        display_name_preference: user.displayNamePreference || 'officerId'
       })
       .eq('id', user.id)
       .select()
       .single();
 
-    if (error) {
+    if (error || !data) {
       console.error('Error updating user:', error);
       return null;
     }
@@ -157,7 +164,8 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
       notificationsEnabled: data.notifications_enabled,
       allowedTabs: data.allowed_tabs || [],
       mobileQuickTabs: data.mobile_quick_tabs || [],
-      officerId: data.officer_id
+      officerId: data.officer_id,
+      displayNamePreference: data.display_name_preference || 'officerId'
     };
   }
 };
@@ -750,13 +758,16 @@ const getOrders = async (): Promise<Order[]> => {
   const userIds = Array.from(new Set<any>(data.flatMap((order: any) => [order.created_by, order.approved_by].filter(Boolean))));
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, officer_id, name')
+    .select('id, officer_id, name, display_name_preference')
     .in('id', userIds);
 
   const userLabelMap = new Map<string, string>();
   (profiles || []).forEach((profile: any) => {
     if (profile.id) {
-      userLabelMap.set(profile.id, profile.officer_id || profile.name || profile.id);
+      const displayValue = profile.display_name_preference === 'name'
+        ? profile.name || profile.officer_id || profile.id
+        : profile.officer_id || profile.name || profile.id;
+      userLabelMap.set(profile.id, displayValue);
     }
   });
 
@@ -965,13 +976,16 @@ const getOrder = async (id: string): Promise<Order | null> => {
   const userIds = [data.created_by, data.approved_by].filter(Boolean);
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, officer_id, name')
+    .select('id, officer_id, name, display_name_preference')
     .in('id', userIds);
 
   const userLabelMap = new Map<string, string>();
   (profiles || []).forEach((profile: any) => {
     if (profile.id) {
-      userLabelMap.set(profile.id, profile.officer_id || profile.name || profile.id);
+      const displayValue = profile.display_name_preference === 'name'
+        ? profile.name || profile.officer_id || profile.id
+        : profile.officer_id || profile.name || profile.id;
+      userLabelMap.set(profile.id, displayValue);
     }
   });
 

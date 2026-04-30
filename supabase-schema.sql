@@ -11,6 +11,7 @@ create table if not exists public.profiles (
   allowed_tabs text[] default array[]::text[],
   mobile_quick_tabs text[] default array[]::text[],
   officer_id text,
+  display_name_preference text not null default 'officerId' check (display_name_preference in ('officerId', 'name')),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );

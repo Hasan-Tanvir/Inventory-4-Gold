@@ -22,7 +22,7 @@ const CustomizationPage = () => {
   const [config, setConfig] = useState<Customization | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [officers, setOfficers] = useState<Officer[]>([]);
-  const [newUser, setNewUser] = useState<Partial<User>>({ role: 'member' });
+  const [newUser, setNewUser] = useState<Partial<User>>({ role: 'member', displayNamePreference: 'officerId' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [driveFolderLink, setDriveFolderLink] = useState('https://drive.google.com/drive/folders/1fHMRSYz2htngjpAsq8Mh73O7CGR5hyEn?usp=sharing');
   const allTabPermissions = [
@@ -264,6 +264,19 @@ const CustomizationPage = () => {
                     </Select>
                     <p className="text-xs text-slate-500">Choose an existing officer account for this user. This links the user to officer-owned dealer visibility.</p>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Display Name Preference</Label>
+                    <Select value={newUser.displayNamePreference || 'officerId'} onValueChange={(v: any) => setNewUser({ ...newUser, displayNamePreference: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select display name" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="officerId">Officer ID</SelectItem>
+                        <SelectItem value="name">Full Name</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">Choose how this user should be addressed across the app.</p>
+                  </div>
                   {newUser.role === 'member' && (
                     <div className="space-y-2">
                       <Label>Allowed Tabs</Label>
@@ -322,7 +335,8 @@ const CustomizationPage = () => {
                         <TableHead>Name</TableHead>
                         <TableHead>Role</TableHead>
                         <TableHead>Officer ID</TableHead>
-                          <TableHead>Mobile Menu Tabs</TableHead>
+                        <TableHead>Display As</TableHead>
+                        <TableHead>Mobile Menu Tabs</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -337,20 +351,19 @@ const CustomizationPage = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>{getOfficerDisplayName(u.officerId)}</TableCell>
+                          <TableCell>{u.displayNamePreference === 'name' ? 'Full Name' : 'Officer ID'}</TableCell>
                           <TableCell>
-                            {true ? (
-                              <div className="flex flex-wrap gap-2">
-                                {mobileTabCandidates.map(tab => (
-                                  <label key={`${u.id}-${tab.path}`} className="flex items-center gap-1 text-[10px]">
-                                    <Checkbox
-                                      checked={(u.mobileQuickTabs?.length ? u.mobileQuickTabs : defaultMobileTabs).includes(tab.path)}
-                                      onCheckedChange={(checked: any) => updateUserMobileTabs(u.id, tab.path, Boolean(checked))}
-                                    />
-                                    {tab.label}
-                                  </label>
-                                ))}
-                              </div>
-                            ) : null}
+                            <div className="flex flex-wrap gap-2">
+                              {mobileTabCandidates.map(tab => (
+                                <label key={`${u.id}-${tab.path}`} className="flex items-center gap-1 text-[10px]">
+                                  <Checkbox
+                                    checked={(u.mobileQuickTabs?.length ? u.mobileQuickTabs : defaultMobileTabs).includes(tab.path)}
+                                    onCheckedChange={(checked: any) => updateUserMobileTabs(u.id, tab.path, Boolean(checked))}
+                                  />
+                                  {tab.label}
+                                </label>
+                              ))}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
@@ -398,6 +411,18 @@ const CustomizationPage = () => {
                     {officers.map(o => (
                       <SelectItem key={o.id} value={o.id}>{o.name} - {o.id}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Display Name Preference</Label>
+                <Select value={editingUser.displayNamePreference || 'officerId'} onValueChange={(v: any) => setEditingUser({ ...editingUser, displayNamePreference: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select display name" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="officerId">Officer ID</SelectItem>
+                    <SelectItem value="name">Full Name</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

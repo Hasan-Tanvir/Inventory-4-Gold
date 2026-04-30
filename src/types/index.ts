@@ -13,6 +13,7 @@ export interface User {
   allowedTabs?: string[];
   mobileQuickTabs?: string[];
   officerId?: string;
+  displayNamePreference?: 'officerId' | 'name';
 }
 
 export interface Notification {
