@@ -2591,6 +2591,33 @@ const getCustomization = async (): Promise<Customization | null> => {
   };
 };
 
+const getConfig = getCustomization;
+
+const getNextOrderId = async (isQuote = false): Promise<string> => {
+  const config = await getCustomization();
+  const defaultSeed = isQuote ? 'Q00001' : 'R00001';
+  const seed = isQuote ? config?.quoteSerialSeed || defaultSeed : config?.orderSerialSeed || defaultSeed;
+  const match = seed.match(/^([A-Za-z]+)(\d+)$/);
+  const prefix = match?.[1] || (isQuote ? 'Q' : 'R');
+  const padLength = match?.[2]?.length || 5;
+  const startNum = match ? parseInt(match[2], 10) : 1;
+
+  const orders = await getOrders();
+  let maxNum = startNum - 1;
+
+  orders.forEach(order => {
+    const orderMatch = order.id?.match(new RegExp(`^${prefix}(\\d+)$`));
+    if (orderMatch) {
+      const num = parseInt(orderMatch[1], 10);
+      if (!Number.isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  });
+
+  return `${prefix}${String(maxNum + 1).padStart(padLength, '0')}`;
+};
+
 const saveCustomization = async (customization: Customization): Promise<boolean> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
