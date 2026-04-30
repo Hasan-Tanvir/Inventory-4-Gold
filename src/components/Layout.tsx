@@ -95,6 +95,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const unreadCount = notifications.filter(n => !n.read).length;
   const shouldHideMobileSidebar = user.role === 'member' && filteredMenu.length < 6;
 
+  const getUserGreeting = (user: User) => {
+    if (user.officerId) return `${user.officerId}${user.name ? ` (${user.name})` : ''}`;
+    return user.name;
+  };
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden" style={themeStyle}>
       <div 
@@ -126,7 +131,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               {user.name.charAt(0)}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-[10px] font-black truncate">{user.name}</p>
+              <p className="text-[10px] font-black truncate">{getUserGreeting(user)}</p>
               <p className="text-[8px] font-bold uppercase opacity-40">{user.role}</p>
             </div>
             <Button variant="ghost" size="icon" onClick={async () => { await api.signOut(); navigate('/login'); }} className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/10">
@@ -180,7 +185,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           
           <div className="flex items-center gap-4">
             <p className="text-[11px] sm:text-xs font-bold text-slate-600">
-              Hello, {user.officerId || user.name}
+              Hello, {getUserGreeting(user)}
             </p>            <Button variant="ghost" size="icon" onClick={async () => { await api.signOut(); navigate('/login'); }} className="h-10 w-10 rounded-xl hover:bg-slate-50 lg:hidden">
               <LogOut className="w-5 h-5 text-slate-400" />
             </Button>            <Popover onOpenChange={async (open) => {
