@@ -639,8 +639,8 @@ export default function NewOrder() {
 
     if (shouldAutoApprove && orderStatus === 'pending') {
       const approved = await api.approveOrder(savedOrder.id, currentUser!.id);
-      if (!approved) {
-        showError('Order placed but approval failed');
+      if (!approved.success) {
+        showError(approved.message || 'Order placed but approval failed');
         setSaving(false);
         return;
       }

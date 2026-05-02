@@ -50,7 +50,7 @@ const Orders = () => {
     } : o));
 
     const approved = await api.approveOrder(id, user.id);
-    if (!approved) {
+    if (!approved.success) {
       // Revert on failure
       setOrders(prev => prev.map(o => o.id === id ? {
         ...o,
@@ -58,7 +58,7 @@ const Orders = () => {
         approvedBy: undefined,
         approvedByLabel: undefined,
       } : o));
-      return showError('Failed to approve order');
+      return showError(approved.message || 'Failed to approve order');
     }
     // Refresh from server to ensure consistency
     setOrders(await api.getOrders());

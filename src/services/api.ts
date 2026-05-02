@@ -1114,13 +1114,13 @@ const searchBySerial = async (serial: string): Promise<{ order: Order; item: any
   return null;
 };
 
-const approveOrder = async (id: string, approvedBy: string): Promise<boolean> => {
+const approveOrder = async (id: string, approvedBy: string): Promise<{ success: boolean; message?: string }> => {
   const existingOrder = await getOrder(id);
-  if (!existingOrder) return false;
-  if (existingOrder.status === 'approved') return true;
+  if (!existingOrder) return { success: false, message: 'Order not found' };
+  if (existingOrder.status === 'approved') return { success: true };
 
   const stockAdjusted = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'approved' });
-  if (!stockAdjusted) return false;
+  if (!stockAdjusted) return { success: false, message: 'Insufficient stock to approve order' };
 
   const { data, error } = await supabase
     .from('orders')
@@ -1131,7 +1131,7 @@ const approveOrder = async (id: string, approvedBy: string): Promise<boolean> =>
 
   if (error || !data) {
     console.error('Error approving order:', error || 'No row returned from update');
-    return false;
+    return { success: false, message: error?.message || 'Failed to update order status' };
   }
 
   if (existingOrder.type === 'retail') {
@@ -1140,7 +1140,7 @@ const approveOrder = async (id: string, approvedBy: string): Promise<boolean> =>
 
   await createCommissionTokenForOrder({ ...existingOrder, status: 'approved' });
 
-  return true;
+  return { success: true };
 };
 
 const rejectOrder = async (id: string): Promise<boolean> => {
