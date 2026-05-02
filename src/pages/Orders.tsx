@@ -37,12 +37,27 @@ const Orders = () => {
 
   const handleApprove = async (id: string) => {
     if (!user) return;
+    const currentUserLabel = user.displayNamePreference === 'name'
+      ? user.name
+      : user.officerId || user.name || user.id;
+
     // Optimistic UI: update local state immediately
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'approved' as const, approvedBy: user.id, approvedByLabel: user.officerId || user.id } : o));
+    setOrders(prev => prev.map(o => o.id === id ? {
+      ...o,
+      status: 'approved' as const,
+      approvedBy: user.id,
+      approvedByLabel: currentUserLabel,
+    } : o));
+
     const approved = await api.approveOrder(id, user.id);
     if (!approved) {
       // Revert on failure
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'pending' as const, approvedBy: undefined } : o));
+      setOrders(prev => prev.map(o => o.id === id ? {
+        ...o,
+        status: 'pending' as const,
+        approvedBy: undefined,
+        approvedByLabel: undefined,
+      } : o));
       return showError('Failed to approve order');
     }
     // Refresh from server to ensure consistency
@@ -52,11 +67,20 @@ const Orders = () => {
 
   const handleReject = async (id: string) => {
     // Optimistic UI: update local state immediately
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'rejected' as const } : o));
+    setOrders(prev => prev.map(o => o.id === id ? {
+      ...o,
+      status: 'rejected' as const,
+      approvedBy: undefined,
+      approvedByLabel: undefined,
+    } : o));
+
     const rejected = await api.rejectOrder(id);
     if (!rejected) {
       // Revert on failure
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'pending' as const } : o));
+      setOrders(prev => prev.map(o => o.id === id ? {
+        ...o,
+        status: 'pending' as const,
+      } : o));
       return showError('Failed to reject order');
     }
     // Refresh from server

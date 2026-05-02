@@ -1152,7 +1152,7 @@ const rejectOrder = async (id: string): Promise<boolean> => {
 
   const { error } = await supabase
     .from('orders')
-    .update({ status: 'rejected' })
+    .update({ status: 'rejected', approved_by: null })
     .eq('id', id);
 
   if (error) {
