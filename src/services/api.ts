@@ -1122,13 +1122,15 @@ const approveOrder = async (id: string, approvedBy: string): Promise<boolean> =>
   const stockAdjusted = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'approved' });
   if (!stockAdjusted) return false;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('orders')
     .update({ status: 'approved', approved_by: approvedBy })
-    .eq('id', id);
+    .eq('id', id)
+    .select()
+    .single();
 
-  if (error) {
-    console.error('Error approving order:', error);
+  if (error || !data) {
+    console.error('Error approving order:', error || 'No row returned from update');
     return false;
   }
 
@@ -1150,13 +1152,15 @@ const rejectOrder = async (id: string): Promise<boolean> => {
     if (!stockRestored) return false;
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('orders')
     .update({ status: 'rejected', approved_by: null })
-    .eq('id', id);
+    .eq('id', id)
+    .select()
+    .single();
 
-  if (error) {
-    console.error('Error rejecting order:', error);
+  if (error || !data) {
+    console.error('Error rejecting order:', error || 'No row returned from update');
     return false;
   }
 
