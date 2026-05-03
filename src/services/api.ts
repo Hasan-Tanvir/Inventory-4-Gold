@@ -1,5 +1,5 @@
 import {
-  User, Product, Order, Dealer, Target, Notification,
+  User, Product, Order, OrderItem, Dealer, Target, Notification,
   Customization, Category, Officer, Payment, RetailTransaction,
   SendAmountEntry, CommissionClearance, ProductStockEntry, ProductStockTransfer, TargetReward
 } from '../types';
@@ -436,7 +436,7 @@ const createCommissionTokenForOrder = async (order: Order): Promise<boolean> => 
   return true;
 };
 
-const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null> => {
+const saveProduct = async (product: Omit<Product, 'id'> & { id?: string }): Promise<Product | null> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -2089,11 +2089,17 @@ const deleteTarget = async (id: string): Promise<boolean> => {
 };
 
 // Notifications
-const getNotifications = async (): Promise<Notification[]> => {
-  const { data, error } = await supabase
+const getNotifications = async (userId?: string): Promise<Notification[]> => {
+  let query = supabase
     .from('notifications')
     .select('*')
     .order('timestamp', { ascending: false });
+  
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching notifications:', error);
@@ -2109,6 +2115,21 @@ const getNotifications = async (): Promise<Notification[]> => {
     read: notification.read,
     timestamp: notification.timestamp,
   }));
+};
+
+const markNotificationsRead = async (userId: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  if (error) {
+    console.error('Error marking notifications as read:', error);
+    return false;
+  }
+
+  return true;
 };
 
 const saveNotification = async (notification: Omit<Notification, 'id'>): Promise<Notification | null> => {
@@ -2827,6 +2848,7 @@ export const api = {
   updateTargetReward,
   undoTargetReward,
   getNotifications,
+  markNotificationsRead,
   saveNotification,
   updateNotification,
   deleteNotification,
