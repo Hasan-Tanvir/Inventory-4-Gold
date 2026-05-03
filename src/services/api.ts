@@ -765,20 +765,23 @@ const getOrders = async (): Promise<Order[]> => {
   }
 
   const userIds = Array.from(new Set<any>(data.flatMap((order: any) => [order.created_by, order.approved_by].filter(Boolean))));
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, officer_id, name, display_name_preference')
-    .in('id', userIds);
 
   const userLabelMap = new Map<string, string>();
-  (profiles || []).forEach((profile: any) => {
-    if (profile.id) {
-      const displayValue = profile.display_name_preference === 'name'
-        ? profile.name || profile.officer_id || profile.id
-        : profile.officer_id || profile.name || profile.id;
-      userLabelMap.set(profile.id, displayValue);
-    }
-  });
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, officer_id, name, display_name_preference')
+      .in('id', userIds);
+
+    (profiles || []).forEach((profile: any) => {
+      if (profile.id) {
+        const displayValue = profile.display_name_preference === 'name'
+          ? profile.name || profile.officer_id || profile.id
+          : profile.officer_id || profile.name || profile.id;
+        userLabelMap.set(profile.id, displayValue);
+      }
+    });
+  }
 
   return data.map(order => ({
     id: order.id,
@@ -983,20 +986,23 @@ const getOrder = async (id: string): Promise<Order | null> => {
   }
 
   const userIds = [data.created_by, data.approved_by].filter(Boolean);
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, officer_id, name, display_name_preference')
-    .in('id', userIds);
 
   const userLabelMap = new Map<string, string>();
-  (profiles || []).forEach((profile: any) => {
-    if (profile.id) {
-      const displayValue = profile.display_name_preference === 'name'
-        ? profile.name || profile.officer_id || profile.id
-        : profile.officer_id || profile.name || profile.id;
-      userLabelMap.set(profile.id, displayValue);
-    }
-  });
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, officer_id, name, display_name_preference')
+      .in('id', userIds);
+
+    (profiles || []).forEach((profile: any) => {
+      if (profile.id) {
+        const displayValue = profile.display_name_preference === 'name'
+          ? profile.name || profile.officer_id || profile.id
+          : profile.officer_id || profile.name || profile.id;
+        userLabelMap.set(profile.id, displayValue);
+      }
+    });
+  }
 
   return {
     id: data.id,
