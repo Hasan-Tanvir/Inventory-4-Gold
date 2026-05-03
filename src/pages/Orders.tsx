@@ -38,7 +38,7 @@ const Orders = () => {
   const handleApprove = async (id: string) => {
     if (!user) return;
     const currentUserLabel = user.displayNamePreference === 'name'
-      ? user.name
+      ? user.name || user.officerId || user.id
       : user.officerId || user.name || user.id;
 
     // Optimistic UI: update local state immediately
@@ -75,13 +75,13 @@ const Orders = () => {
     } : o));
 
     const rejected = await api.rejectOrder(id);
-    if (!rejected) {
+    if (!rejected.success) {
       // Revert on failure
       setOrders(prev => prev.map(o => o.id === id ? {
         ...o,
         status: 'pending' as const,
       } : o));
-      return showError('Failed to reject order');
+      return showError(rejected.message || 'Failed to reject order');
     }
     // Refresh from server
     setOrders(await api.getOrders());

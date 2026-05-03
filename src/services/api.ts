@@ -307,28 +307,34 @@ const getProduct = async (id: string): Promise<Product | null> => {
   };
 };
 
-const adjustProductStock = async (productId: string, location: 'dhaka' | 'chittagong', delta: number): Promise<boolean> => {
+const adjustProductStock = async (
+  productId: string,
+  location: 'dhaka' | 'chittagong',
+  delta: number,
+  allowNegative = false
+): Promise<{ success: boolean; message?: string }> => {
   const product = await getProduct(productId);
-  if (!product) return false;
+  if (!product) return { success: false, message: 'Product not found for stock adjustment' };
 
   const currentQty = product[location] || 0;
   const updatedQty = currentQty + delta;
-  if (updatedQty < 0) {
-    console.error('Insufficient stock for adjustment:', { productId, location, currentQty, delta });
-    return false;
+  if (updatedQty < 0 && !allowNegative) {
+    const message = `Insufficient ${location} stock for product ${product.name || product.id}. Available: ${currentQty}, required: ${Math.abs(delta)}`;
+    console.error(message, { productId, location, currentQty, delta });
+    return { success: false, message };
   }
 
   const { error } = await supabase
     .from('products')
-    .update({ [location]: updatedQty })
+    .update({ [location]: Math.max(0, updatedQty) })
     .eq('id', productId);
 
   if (error) {
     console.error('Error adjusting product stock:', error);
-    return false;
+    return { success: false, message: 'Failed to update product stock' };
   }
 
-  return true;
+  return { success: true };
 };
 
 const getOrderInventoryMap = (items: OrderItem[], inventorySource: 'dhaka' | 'chittagong' | 'mixed'): Map<string, number> => {
@@ -345,30 +351,32 @@ const getOrderInventoryMap = (items: OrderItem[], inventorySource: 'dhaka' | 'ch
   return map;
 };
 
-const applyOrderStockDelta = async (originalOrder: Order | null, updatedOrder: Order): Promise<boolean> => {
+const applyOrderStockDelta = async (originalOrder: Order | null, updatedOrder: Order): Promise<{ success: boolean; message?: string }> => {
   const originalApproved = originalOrder?.status === 'approved';
   const updatedApproved = updatedOrder.status === 'approved';
 
   if (!originalApproved && !updatedApproved) {
-    return true;
+    return { success: true };
   }
 
   if (originalApproved && !updatedApproved) {
     const originalMap = getOrderInventoryMap(originalOrder!.items, originalOrder!.inventorySource);
     for (const [key, qty] of originalMap.entries()) {
       const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
-      if (!(await adjustProductStock(productId, location, qty))) return false;
+      const result = await adjustProductStock(productId, location, qty);
+      if (!result.success) return result;
     }
-    return true;
+    return { success: true };
   }
 
   if (!originalApproved && updatedApproved) {
     const newMap = getOrderInventoryMap(updatedOrder.items, updatedOrder.inventorySource);
     for (const [key, qty] of newMap.entries()) {
       const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
-      if (!(await adjustProductStock(productId, location, -qty))) return false;
+      const result = await adjustProductStock(productId, location, -qty);
+      if (!result.success) return result;
     }
-    return true;
+    return { success: true };
   }
 
   const originalMap = getOrderInventoryMap(originalOrder!.items, originalOrder!.inventorySource);
@@ -381,10 +389,11 @@ const applyOrderStockDelta = async (originalOrder: Order | null, updatedOrder: O
     const newQty = newMap.get(key) || 0;
     const delta = newQty - originalQty;
     if (delta === 0) continue;
-    if (!(await adjustProductStock(productId, location, -delta))) return false;
+    const result = await adjustProductStock(productId, location, -delta);
+    if (!result.success) return result;
   }
 
-  return true;
+  return { success: true };
 };
 
 const createCommissionTokenForOrder = async (order: Order): Promise<boolean> => {
@@ -929,8 +938,8 @@ const deleteOrder = async (id: string): Promise<boolean> => {
   const existingOrder = await getOrder(id);
   if (existingOrder?.status === 'approved') {
     const restored = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'rejected' });
-    if (!restored) {
-      console.error('Error restoring stock for approved order before delete');
+    if (!restored.success) {
+      console.error('Error restoring stock for approved order before delete:', restored.message);
       return false;
     }
   }
@@ -1120,7 +1129,7 @@ const approveOrder = async (id: string, approvedBy: string): Promise<{ success: 
   if (existingOrder.status === 'approved') return { success: true };
 
   const stockAdjusted = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'approved' });
-  if (!stockAdjusted) return { success: false, message: 'Insufficient stock to approve order' };
+  if (!stockAdjusted.success) return { success: false, message: stockAdjusted.message || 'Insufficient stock to approve order' };
 
   const { data, error } = await supabase
     .from('orders')
@@ -1143,13 +1152,16 @@ const approveOrder = async (id: string, approvedBy: string): Promise<{ success: 
   return { success: true };
 };
 
-const rejectOrder = async (id: string): Promise<boolean> => {
+const rejectOrder = async (id: string): Promise<{ success: boolean; message?: string }> => {
   const existingOrder = await getOrder(id);
-  if (!existingOrder) return false;
+  if (!existingOrder) return { success: false, message: 'Order not found' };
 
   if (existingOrder.status === 'approved') {
     const stockRestored = await applyOrderStockDelta(existingOrder, { ...existingOrder, status: 'rejected' });
-    if (!stockRestored) return false;
+    if (!stockRestored.success) {
+      console.error('Error restoring stock on order rejection:', stockRestored.message);
+      return { success: false, message: stockRestored.message || 'Failed to restore stock on order rejection' };
+    }
   }
 
   const { data, error } = await supabase
@@ -1161,10 +1173,10 @@ const rejectOrder = async (id: string): Promise<boolean> => {
 
   if (error || !data) {
     console.error('Error rejecting order:', error || 'No row returned from update');
-    return false;
+    return { success: false, message: error?.message || 'Failed to update order status' };
   }
 
-  return true;
+  return { success: true };
 };
 
 const placeOrder = async (order: Order): Promise<{ success: boolean; order?: Order; message?: string }> => {
@@ -1176,7 +1188,7 @@ const placeOrder = async (order: Order): Promise<{ success: boolean; order?: Ord
 
     if (order.status === 'approved') {
       const stockAdjusted = await applyOrderStockDelta(null, order);
-      if (!stockAdjusted) return { success: false, message: 'Failed to adjust stock for approved order' };
+      if (!stockAdjusted.success) return { success: false, message: stockAdjusted.message || 'Failed to adjust stock for approved order' };
     }
 
     return { success: true, order: saved };
@@ -1220,8 +1232,8 @@ const placeOrder = async (order: Order): Promise<{ success: boolean; order?: Ord
   }
 
   const stockAdjusted = await applyOrderStockDelta(existingOrder, order);
-  if (!stockAdjusted) {
-    return { success: false, message: 'Failed to adjust stock for order update' };
+  if (!stockAdjusted.success) {
+    return { success: false, message: stockAdjusted.message || 'Failed to adjust stock for order update' };
   }
 
   return { success: true, order };
@@ -1617,7 +1629,10 @@ const saveProductStockEntries = async (
 
     for (const [key, qty] of adjustmentMap.entries()) {
       const [productId, location] = key.split(':') as [string, 'dhaka' | 'chittagong'];
-      await adjustProductStock(productId, location, qty);
+      const result = await adjustProductStock(productId, location, qty);
+      if (!result.success) {
+        console.error('Error applying stock entries to inventory:', result.message);
+      }
     }
   }
 
@@ -2193,8 +2208,9 @@ const saveProductStockEntry = async (entry: Omit<ProductStockEntry, 'id'>): Prom
   }
 
   const adjusted = await adjustProductStock(entry.productId, entry.location, entry.quantity);
-  if (!adjusted) {
+  if (!adjusted.success) {
     await supabase.from('product_stock_entries').delete().eq('id', data.id);
+    console.error('Error applying initial stock entry to inventory:', adjusted.message);
     return null;
   }
 
@@ -2233,10 +2249,10 @@ const updateProductStockEntry = async (id: string, entry: Partial<ProductStockEn
 
   if (oldProductId !== newProductId || oldLocation !== newLocation || oldQuantity !== newQuantity) {
     const restored = await adjustProductStock(oldProductId, oldLocation, oldQuantity);
-    if (!restored) return false;
+    if (!restored.success) return false;
 
     const adjusted = await adjustProductStock(newProductId, newLocation, -newQuantity);
-    if (!adjusted) {
+    if (!adjusted.success) {
       await adjustProductStock(oldProductId, oldLocation, -oldQuantity);
       return false;
     }
@@ -2280,9 +2296,9 @@ const deleteProductStockEntry = async (id: string): Promise<boolean> => {
     return false;
   }
 
-  const adjusted = await adjustProductStock(existing.product_id, existing.location, -existing.quantity);
-  if (!adjusted) {
-    console.error('Error reversing product stock for deleted stock entry');
+  const adjusted = await adjustProductStock(existing.product_id, existing.location, -existing.quantity, true);
+  if (!adjusted.success) {
+    console.error('Error reversing product stock for deleted stock entry:', adjusted.message);
     return false;
   }
 
@@ -2358,13 +2374,14 @@ const saveProductStockTransfer = async (transfer: Omit<ProductStockTransfer, 'id
   const fromAdjusted = await adjustProductStock(transfer.productId, transfer.from, -transfer.quantity);
   const toAdjusted = await adjustProductStock(transfer.productId, transfer.to, transfer.quantity);
 
-  if (!fromAdjusted || !toAdjusted) {
-    if (fromAdjusted) {
+  if (!fromAdjusted.success || !toAdjusted.success) {
+    if (fromAdjusted.success) {
       await adjustProductStock(transfer.productId, transfer.from, transfer.quantity);
     }
-    if (toAdjusted) {
+    if (toAdjusted.success) {
       await adjustProductStock(transfer.productId, transfer.to, -transfer.quantity);
     }
+    console.error('Error adjusting stock during transfer:', fromAdjusted.message, toAdjusted.message);
     return { success: false, message: 'Failed to adjust product stock after transfer' };
   }
 
@@ -2408,9 +2425,9 @@ const updateProductStockTransfer = async (id: string, transfer: Partial<ProductS
   const revertedFrom = await adjustProductStock(oldProductId, oldFrom, oldQuantity);
   const revertedTo = await adjustProductStock(oldProductId, oldTo, -oldQuantity);
 
-  if (!revertedFrom || !revertedTo) {
-    if (revertedFrom) await adjustProductStock(oldProductId, oldFrom, -oldQuantity);
-    if (revertedTo) await adjustProductStock(oldProductId, oldTo, oldQuantity);
+  if (!revertedFrom.success || !revertedTo.success) {
+    if (revertedFrom.success) await adjustProductStock(oldProductId, oldFrom, -oldQuantity);
+    if (revertedTo.success) await adjustProductStock(oldProductId, oldTo, oldQuantity);
     return false;
   }
 
@@ -2422,9 +2439,9 @@ const updateProductStockTransfer = async (id: string, transfer: Partial<ProductS
   const appliedFrom = await adjustProductStock(newProductId, newFrom, -newQuantity);
   const appliedTo = await adjustProductStock(newProductId, newTo, newQuantity);
 
-  if (!appliedFrom || !appliedTo) {
-    if (appliedFrom) await adjustProductStock(newProductId, newFrom, newQuantity);
-    if (appliedTo) await adjustProductStock(newProductId, newTo, -newQuantity);
+  if (!appliedFrom.success || !appliedTo.success) {
+    if (appliedFrom.success) await adjustProductStock(newProductId, newFrom, newQuantity);
+    if (appliedTo.success) await adjustProductStock(newProductId, newTo, -newQuantity);
     await adjustProductStock(oldProductId, oldFrom, -oldQuantity);
     await adjustProductStock(oldProductId, oldTo, oldQuantity);
     return false;
@@ -2469,12 +2486,12 @@ const deleteProductStockTransfer = async (id: string): Promise<boolean> => {
   const to = existing.to_location as 'dhaka' | 'chittagong';
   const quantity = existing.quantity;
 
-  const restoredFrom = await adjustProductStock(productId, from, quantity);
-  const reversedTo = await adjustProductStock(productId, to, -quantity);
+  const restoredFrom = await adjustProductStock(productId, from, quantity, true);
+  const reversedTo = await adjustProductStock(productId, to, -quantity, true);
 
-  if (!restoredFrom || !reversedTo) {
-    if (restoredFrom) await adjustProductStock(productId, from, -quantity);
-    if (reversedTo) await adjustProductStock(productId, to, quantity);
+  if (!restoredFrom.success || !reversedTo.success) {
+    if (restoredFrom.success) await adjustProductStock(productId, from, -quantity);
+    if (reversedTo.success) await adjustProductStock(productId, to, quantity);
     return false;
   }
 
