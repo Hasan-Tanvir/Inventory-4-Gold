@@ -382,6 +382,12 @@ for select
 to authenticated
 using (auth.uid() = id);
 
+create policy "Users can view all profile names and officer_ids"
+on public.profiles
+for select
+to authenticated
+using (true);
+
 create policy "Users can update own profile"
 on public.profiles
 for update

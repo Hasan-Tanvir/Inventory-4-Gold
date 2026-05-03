@@ -768,13 +768,17 @@ const getOrders = async (): Promise<Order[]> => {
 
   const userLabelMap = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
       .select('id, officer_id, name, display_name_preference')
       .in('id', userIds);
 
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+    }
+
     (profiles || []).forEach((profile: any) => {
-      if (profile.id) {
+      if (profile?.id) {
         const displayValue = profile.display_name_preference === 'name'
           ? profile.name || profile.officer_id || profile.id
           : profile.officer_id || profile.name || profile.id;
@@ -989,13 +993,17 @@ const getOrder = async (id: string): Promise<Order | null> => {
 
   const userLabelMap = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
       .select('id, officer_id, name, display_name_preference')
       .in('id', userIds);
 
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+    }
+
     (profiles || []).forEach((profile: any) => {
-      if (profile.id) {
+      if (profile?.id) {
         const displayValue = profile.display_name_preference === 'name'
           ? profile.name || profile.officer_id || profile.id
           : profile.officer_id || profile.name || profile.id;
