@@ -11,13 +11,13 @@ const getCurrentUser = async (): Promise<User | null> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const { data: profiles, error } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', user.id)
-    .single();
+    .eq('id', user.id);
 
-  if (!profile) return null;
+  if (error || !profiles || profiles.length === 0) return null;
+  const profile = profiles[0];
 
   return {
     id: user.id,
@@ -102,7 +102,7 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
     const authUser = await signUp(user.id, user.password, user.name);
     if (!authUser) return null;
     // Now update the profile with additional fields
-    const { data, error } = await supabase
+    const { data: profiles, error } = await supabase
       .from('profiles')
       .update({
         role: user.role,
@@ -114,13 +114,13 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
         display_name_preference: user.displayNamePreference || 'officerId'
       })
       .eq('id', authUser.id)
-      .select()
-      .single();
+      .select();
 
-    if (error || !data) {
+    if (error || !profiles || profiles.length === 0) {
       console.error('Error creating user profile:', error);
       return null;
     }
+    const data = profiles[0];
 
     return {
       id: data.id,
@@ -135,7 +135,7 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
     };
   } else {
     // Update existing user
-    const { data, error } = await supabase
+    const { data: profiles, error } = await supabase
       .from('profiles')
       .update({
         name: user.name,
@@ -148,13 +148,13 @@ const saveUser = async (user: User & { password?: string }): Promise<User | null
         display_name_preference: user.displayNamePreference || 'officerId'
       })
       .eq('id', user.id)
-      .select()
-      .single();
+      .select();
 
-    if (error || !data) {
+    if (error || !profiles || profiles.length === 0) {
       console.error('Error updating user:', error);
       return null;
     }
+    const data = profiles[0];
 
     return {
       id: data.id,
@@ -201,19 +201,19 @@ const saveCategory = async (category: Omit<Category, 'id'> & { id?: string }): P
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  const { data: categories, error } = await supabase
     .from('categories')
     .upsert({
       ...category,
       user_id: user.id,
     })
-    .select()
-    .single();
+    .select();
 
-  if (error) {
+  if (error || !categories || categories.length === 0) {
     console.error('Error saving category:', error);
     return null;
   }
+  const data = categories[0];
 
   return {
     id: data.id,
@@ -445,7 +445,7 @@ const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null
   const initialDhaka = isNew ? product.dhaka : 0;
   const initialChittagong = isNew ? product.chittagong : 0;
 
-  const { data, error } = await supabase
+  const { data: products, error } = await supabase
     .from('products')
     .insert({
       name: product.name,
@@ -459,13 +459,13 @@ const saveProduct = async (product: Omit<Product, 'id'>): Promise<Product | null
       slabs: product.slabs,
       user_id: user.id,
     })
-    .select()
-    .single();
+    .select();
 
-  if (error) {
+  if (error || !products || products.length === 0) {
     console.error('Error saving product:', error);
     return null;
   }
+  const data = products[0];
 
   // Create initial stock entries
   const initialEntryId = (initialDhaka > 0 || initialChittagong > 0) ? await getNextStockEntryId() : undefined;
@@ -592,7 +592,7 @@ const saveDealer = async (dealer: Omit<Dealer, 'id'>): Promise<Dealer | null> =>
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  const { data: dealers, error } = await supabase
     .from('dealers')
     .insert({
       name: dealer.name,
@@ -603,13 +603,13 @@ const saveDealer = async (dealer: Omit<Dealer, 'id'>): Promise<Dealer | null> =>
       officer_id: dealer.officerId,
       user_id: user.id,
     })
-    .select()
-    .single();
+    .select();
 
-  if (error) {
+  if (error || !dealers || dealers.length === 0) {
     console.error('Error saving dealer:', error);
     return null;
   }
+  const data = dealers[0];
 
   return {
     id: data.id,
@@ -684,7 +684,7 @@ const saveOfficer = async (officer: Omit<Officer, 'id' | 'clearanceHistory' | 'c
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  const { data: officers, error } = await supabase
     .from('officers')
     .insert({
       name: officer.name,
@@ -693,13 +693,13 @@ const saveOfficer = async (officer: Omit<Officer, 'id' | 'clearanceHistory' | 'c
       commission_balance: officer.commissionBalance,
       user_id: user.id,
     })
-    .select()
-    .single();
+    .select();
 
-  if (error) {
+  if (error || !officers || officers.length === 0) {
     console.error('Error saving officer:', error);
     return null;
   }
+  const data = officers[0];
 
   return {
     id: data.id,
@@ -779,9 +779,7 @@ const getOrders = async (): Promise<Order[]> => {
 
     (profiles || []).forEach((profile: any) => {
       if (profile?.id) {
-        const name = profile.name || 'User';
-        const officerId = profile.officer_id || 'N/A';
-        const displayValue = `${officerId} (${name})`;
+        const displayValue = profile.officer_id || profile.id;
         userLabelMap.set(profile.id, displayValue);
       }
     });
@@ -834,7 +832,7 @@ const saveOrder = async (order: Order): Promise<Order | null> => {
   if (!user) return null;
 
   // Insert order
-  const { data: orderData, error: orderError } = await supabase
+  const { data: orders, error: orderError } = await supabase
     .from('orders')
     .insert({
       id: order.id,
@@ -863,13 +861,13 @@ const saveOrder = async (order: Order): Promise<Order | null> => {
       show_serials_on_invoice: order.showSerialsOnInvoice,
       user_id: user.id,
     })
-    .select()
-    .single();
+    .select();
 
-  if (orderError) {
+  if (orderError || !orders || orders.length === 0) {
     console.error('Error saving order:', orderError);
     return null;
   }
+  const orderData = orders[0];
 
   // Insert order items
   const itemsToInsert = order.items.map(item => ({
@@ -971,7 +969,7 @@ const deleteOrder = async (id: string): Promise<boolean> => {
 };
 
 const getOrder = async (id: string): Promise<Order | null> => {
-  const { data, error } = await supabase
+  const { data: orders, error } = await supabase
     .from('orders')
     .select(`
       *,
@@ -981,13 +979,13 @@ const getOrder = async (id: string): Promise<Order | null> => {
         name
       )
     `)
-    .eq('id', id)
-    .single();
+    .eq('id', id);
 
-  if (error) {
+  if (error || !orders || orders.length === 0) {
     console.error('Error fetching order:', error);
     return null;
   }
+  const data = orders[0];
 
   const userIds = [data.created_by, data.approved_by].filter(Boolean);
 
@@ -1004,9 +1002,7 @@ const getOrder = async (id: string): Promise<Order | null> => {
 
     (profiles || []).forEach((profile: any) => {
       if (profile?.id) {
-        const name = profile.name || 'User';
-        const officerId = profile.officer_id || 'N/A';
-        const displayValue = `${officerId} (${name})`;
+        const displayValue = profile.officer_id || profile.id;
         userLabelMap.set(profile.id, displayValue);
       }
     });
@@ -1965,16 +1961,16 @@ const getTargets = async (): Promise<Target[]> => {
 };
 
 const getTarget = async (id: string): Promise<Target | null> => {
-  const { data, error } = await supabase
+  const { data: targets, error } = await supabase
     .from('targets')
     .select('*')
-    .eq('id', id)
-    .single();
+    .eq('id', id);
 
-  if (error || !data) {
+  if (error || !targets || targets.length === 0) {
     if (error) console.error('Error fetching target:', error);
     return null;
   }
+  const data = targets[0];
 
   return {
     id: data.id,
@@ -2640,37 +2636,35 @@ const deleteRetailTransaction = async (id: string): Promise<boolean> => {
 const getCustomization = async (): Promise<Customization | null> => {
   const { data, error } = await supabase
     .from('customization')
-    .select('*')
-    .single();
+    .select('*');
 
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // No rows
-      return null;
+  if (error || !data || data.length === 0) {
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching customization:', error);
     }
-    console.error('Error fetching customization:', error);
     return null;
   }
 
+  const firstConfig = data[0];
   return {
-    title: data.title,
-    logo: data.logo,
-    sidebarColor: data.sidebar_color,
-    mainColor: data.main_color,
-    initialRetailAmount: data.initial_retail_amount,
-    initialRetailAmountDhaka: data.initial_retail_amount_dhaka,
-    initialRetailAmountChittagong: data.initial_retail_amount_chittagong,
-    regards: data.regards,
-    execName: data.exec_name,
-    execDetails: data.exec_details,
-    customDetailText: data.custom_detail_text,
-    customDetailHtml: data.custom_detail_html,
-    customDetailBold: data.custom_detail_bold,
-    customDetailItalic: data.custom_detail_italic,
-    customDetailBoxed: data.custom_detail_boxed,
-    orderSerialSeed: data.order_serial_seed,
-    quoteSerialSeed: data.quote_serial_seed,
-    paymentReferenceSeed: data.payment_reference_seed,
+    title: firstConfig.title,
+    logo: firstConfig.logo,
+    sidebarColor: firstConfig.sidebar_color,
+    mainColor: firstConfig.main_color,
+    initialRetailAmount: firstConfig.initial_retail_amount,
+    initialRetailAmountDhaka: firstConfig.initial_retail_amount_dhaka,
+    initialRetailAmountChittagong: firstConfig.initial_retail_amount_chittagong,
+    regards: firstConfig.regards,
+    execName: firstConfig.exec_name,
+    execDetails: firstConfig.exec_details,
+    customDetailText: firstConfig.custom_detail_text,
+    customDetailHtml: firstConfig.custom_detail_html,
+    customDetailBold: firstConfig.custom_detail_bold,
+    customDetailItalic: firstConfig.custom_detail_italic,
+    customDetailBoxed: firstConfig.custom_detail_boxed,
+    orderSerialSeed: firstConfig.order_serial_seed,
+    quoteSerialSeed: firstConfig.quote_serial_seed,
+    paymentReferenceSeed: firstConfig.payment_reference_seed,
   };
 };
 

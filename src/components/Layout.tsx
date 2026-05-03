@@ -96,9 +96,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const shouldHideMobileSidebar = user.role === 'member' && filteredMenu.length < 6;
 
   const getUserGreeting = (user: User) => {
-    const name = user.name || 'User';
-    const officerId = user.officerId || 'N/A';
-    return `${officerId} (${name})`;
+    return user.officerId || user.id;
   };
 
   return (
