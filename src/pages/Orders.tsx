@@ -37,9 +37,7 @@ const Orders = () => {
 
   const handleApprove = async (id: string) => {
     if (!user) return;
-    const currentUserLabel = user.displayNamePreference === 'name'
-      ? user.name || user.officerId || user.id
-      : user.officerId || user.name || user.id;
+    const currentUserLabel = `${user.officerId || 'N/A'} (${user.name || 'User'})`;
 
     // Optimistic UI: update local state immediately
     setOrders(prev => prev.map(o => o.id === id ? {

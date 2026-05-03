@@ -779,9 +779,9 @@ const getOrders = async (): Promise<Order[]> => {
 
     (profiles || []).forEach((profile: any) => {
       if (profile?.id) {
-        const displayValue = profile.display_name_preference === 'name'
-          ? profile.name || profile.officer_id || profile.id
-          : profile.officer_id || profile.name || profile.id;
+        const name = profile.name || 'User';
+        const officerId = profile.officer_id || 'N/A';
+        const displayValue = `${officerId} (${name})`;
         userLabelMap.set(profile.id, displayValue);
       }
     });
@@ -1004,9 +1004,9 @@ const getOrder = async (id: string): Promise<Order | null> => {
 
     (profiles || []).forEach((profile: any) => {
       if (profile?.id) {
-        const displayValue = profile.display_name_preference === 'name'
-          ? profile.name || profile.officer_id || profile.id
-          : profile.officer_id || profile.name || profile.id;
+        const name = profile.name || 'User';
+        const officerId = profile.officer_id || 'N/A';
+        const displayValue = `${officerId} (${name})`;
         userLabelMap.set(profile.id, displayValue);
       }
     });
@@ -1158,7 +1158,7 @@ const approveOrder = async (id: string, approvedBy: string): Promise<{ success: 
   }
 
   if (existingOrder.type === 'retail') {
-    await syncRetailSalesFromApprovedOrders();
+    await syncRetailSalesFromApprovedOrders(id);
   }
 
   await createCommissionTokenForOrder({ ...existingOrder, status: 'approved' });
@@ -1188,6 +1188,14 @@ const rejectOrder = async (id: string): Promise<{ success: boolean; message?: st
   if (error || !data) {
     console.error('Error rejecting order:', error || 'No row returned from update');
     return { success: false, message: error?.message || 'Failed to update order status' };
+  }
+
+  // Remove from retail transactions if it was a retail order
+  if (existingOrder.type === 'retail') {
+    await supabase
+      .from('retail_transactions')
+      .delete()
+      .eq('order_id', id);
   }
 
   return { success: true };
@@ -1451,12 +1459,18 @@ const undoTargetReward = async (id: string): Promise<{ success: boolean; message
   return { success: true };
 };
 
-const syncRetailSalesFromApprovedOrders = async (): Promise<{ success: boolean; message?: string }> => {
-  const { data: approvedOrders, error: ordersError } = await supabase
+const syncRetailSalesFromApprovedOrders = async (orderId?: string): Promise<{ success: boolean; message?: string }> => {
+  let query = supabase
     .from('orders')
     .select('*')
     .eq('type', 'retail')
     .eq('status', 'approved');
+  
+  if (orderId) {
+    query = query.eq('id', orderId);
+  }
+
+  const { data: approvedOrders, error: ordersError } = await query;
 
   if (ordersError) {
     console.error('Error fetching approved retail orders:', ordersError);

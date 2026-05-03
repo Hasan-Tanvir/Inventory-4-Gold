@@ -31,13 +31,14 @@ const Payments = () => {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const currentUser = api.getCurrentUser();
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     const loadData = async () => {
       setDealers(await api.getDealers());
       setPayments(await api.getPayments());
       setReference(await api.getNextPaymentReference());
+      setCurrentUser(await api.getCurrentUser());
     };
     loadData();
   }, []);
